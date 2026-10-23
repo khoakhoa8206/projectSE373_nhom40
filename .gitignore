@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.db
+*.db-journal
+results/
+traces/*.jsonl
+node_modules/
+web/dist/
+.pytest_cache/
+.ruff_cache/
