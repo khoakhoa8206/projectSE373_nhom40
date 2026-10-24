@@ -127,6 +127,18 @@ def test_violation_loops_back_to_plan(db, monkeypatch):
     assert unresolved == [{"round": 4}]
 
 
+def test_setup_error_still_returns_run_id(db, monkeypatch):
+    def missing_tools():
+        raise ImportError("chưa có agent.src.tools.destination")
+
+    monkeypatch.setattr(app, "default_tools", missing_tools)
+    res = app.run_uc02(new_trip(), "u-ha", client=FakeLLM())
+    assert res["status"] == "error" and "ImportError" in res["error"]
+    assert repo.query("SELECT status FROM runs WHERE run_id = ?", (res["run_id"],)) == [{"status": "failed"}]
+    err = repo.query("SELECT node, error FROM trace_events WHERE run_id = ? AND kind = 'error'", (res["run_id"],))
+    assert err == [{"node": "setup", "error": res["error"]}]  # PWA vẫn xem được log
+
+
 def test_api_flow_and_ownership(db, monkeypatch):
     monkeypatch.setattr(app, "make_client", FakeLLM)
     monkeypatch.setattr(app, "default_tools", lambda: TOOLS)

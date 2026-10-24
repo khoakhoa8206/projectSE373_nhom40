@@ -75,10 +75,17 @@ def finalize(state):
 
 def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None):
     """Chạy 1 lượt UC-02 và luôn đóng run (token, chi phí, độ trễ). Trả {run_id, itinerary_id, status, error}."""
-    client = client or make_client()
-    tools = default_tools() if tools is None else tools
     run_id = repo.create_run("UC-02", trip_id, user_id, eval_case_id)
     usage = {"in": 0, "out": 0, "cost": 0.0}
+    t0 = time.perf_counter()
+    try:  # tạo run trước: thiếu tool / API key vẫn có run_id + trace để PWA xem log
+        client = client or make_client()
+        tools = default_tools() if tools is None else tools
+    except Exception as e:  # noqa: BLE001
+        error = f"{type(e).__name__}: {e}"
+        repo.log_event(run_id, "setup", "error", error=error)
+        repo.finish_run(run_id, "failed", 0, 0, 0.0, ms(t0))
+        return {"run_id": run_id, "itinerary_id": None, "status": "error", "error": error}
 
     g = StateGraph(State)
     g.add_node("load_profile", traced("load_profile", load_profile))
@@ -91,7 +98,6 @@ def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None):
     g.add_conditional_edges("validate", lambda s: "plan" if s["violations"] and s["round"] < MAX_ROUNDS else "finalize")
     g.add_edge("finalize", END)
 
-    t0 = time.perf_counter()
     try:
         out = g.compile().invoke({"run_id": run_id, "trip_id": trip_id, "itinerary_id": repo.new_id("it")})
         result = {"run_id": run_id, "itinerary_id": out["itinerary"].itinerary_id, "status": out["itinerary"].status,
