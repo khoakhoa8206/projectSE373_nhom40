@@ -2,6 +2,8 @@
 
 export type User = { user_id: string; display_name: string; preferred_lang: "vi" | "en" };
 
+export type Poi = { poi_id: string; name_vi: string; category: "attraction" | "food" | "lodging"; lat: number; lon: number };
+
 export type TripProfile = {
   start_date: string;
   end_date: string;

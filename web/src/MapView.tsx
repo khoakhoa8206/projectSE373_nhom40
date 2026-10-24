@@ -1,9 +1,10 @@
 import L from "leaflet";
 import { useEffect, useRef } from "react";
-import type { Slot } from "./api";
+import { api, type Poi, type Slot } from "./api";
 
 const HUE: L.LatLngTuple = [16.4637, 107.5909];
 export const DAY_COLORS = ["#0f5f73", "#c2410c", "#7c3aed", "#15803d", "#be123c"];
+const POI_COLORS = { attraction: "#475569", food: "#b45309", lodging: "#0369a1" };
 
 /** Nội dung popup dựng bằng textContent: activity do LLM sinh, không được chèn thành HTML. */
 function popup(s: Slot): HTMLElement {
@@ -27,6 +28,18 @@ export default function MapView({ slots }: { slots: Slot[] }) {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(m);
     map.current = m;
+    // Mọi POI Huế từ GET /api/pois (chấm nhỏ, màu theo loại); lịch trình vẽ đè lên trên.
+    const pois = L.layerGroup().addTo(m);
+    api<Poi[]>("/pois").then(
+      (list) =>
+        list.forEach((p) => {
+          const name = document.createElement("span");
+          name.textContent = p.name_vi; // dữ liệu từ DB, không chèn thành HTML
+          const color = POI_COLORS[p.category];
+          L.circleMarker([p.lat, p.lon], { radius: 5, color, weight: 1, fillOpacity: 0.7 }).bindTooltip(name).addTo(pois);
+        }),
+      () => {}, // không tải được POI thì bản đồ vẫn dùng được
+    );
     layer.current = L.layerGroup().addTo(m);
     return () => void m.remove();
   }, []);
