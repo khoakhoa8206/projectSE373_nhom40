@@ -6,3 +6,4 @@ Mỗi lần dùng công cụ AI hỗ trợ code/tài liệu, ghi 1 dòng: ngày 
 |---|---|---|---|---|
 | 23/10/2026 | P1 | Claude Code (Claude Opus 5.5) | Dựng khung repo Phase 1: tầng DB (`agent/db`), model Pydantic, graph LangGraph UC-02 + vòng gọi tool qua OpenRouter, API FastAPI, eval runner, CI, README/AGENTS.md | `ruff` + 7 test pytest xanh; chạy thử eval runner với mock giả; _P1 đọc lại trước khi push_ |
 | 24/10/2026 | P4 | Claude Code (Claude Opus 5.5) | P4-3 khung PWA `web/` (Vite + React + TS, manifest + service worker), bản đồ Leaflet/OSM, màn hình chọn người dùng | `npm run build` qua; _P4 đọc lại trước khi push_ |
+| 24/10/2026 | P4 | Claude Code (Claude Opus 5.5) | P4-4 màn hình UC-02 trên PWA: form hồ sơ, lịch trình theo ngày, marker + tuyến trên bản đồ, panel log, loading + thông báo lỗi | `npm run build` qua; thử UI trên trình duyệt với backend dùng LLM/tool giả; _P4 đọc lại trước khi push_ |
