@@ -13,7 +13,7 @@ from fastapi import FastAPI, Header, HTTPException
 
 Mode = Literal["normal", "heavy_rain", "timeout", "abnormal"]
 DATA = json.loads(Path(__file__).with_name("mock_data.json").read_text(encoding="utf-8"))
-TIMEOUT_SLEEP_S = 60  # lâu hơn timeout 10 s của tool
+TIMEOUT_SLEEP_S = 15  # theo đề; lâu hơn timeout 10 s của tool
 
 app = FastAPI(title="mock-weather")
 

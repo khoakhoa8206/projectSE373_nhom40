@@ -29,14 +29,23 @@ def snapshots(run_id):
 @pytest.mark.parametrize("mode, expect", [
     ("normal", {"temp_max_c": 26.4, "precip_mm": 2.6, "condition": "light_rain"}),
     ("heavy_rain", {"temp_max_c": 26.4, "precip_mm": 85.0, "condition": "heavy_rain"}),
-    ("abnormal", {"temp_max_c": 48.0, "precip_mm": -3.0, "condition": "clear"}),
 ])  # fmt: skip
 def test_modes_write_snapshot(run_id, monkeypatch, mode, expect):
     use_mock(monkeypatch, mode)
     res = weather.get_weather_forecast("hue", DAY, run_id)
     assert res["status"] == "ok" and res.items() >= expect.items()
     assert snapshots(run_id) == [expect | {"provider": "mock_weather"}]
-    assert repo.weather_for_run(run_id)[DAY]["snapshot_id"] == res["snapshot_id"]  # validator đọc lại được
+    row = repo.weather_for_run(run_id)[DAY]  # validator đọc lại được
+    assert row["snapshot_id"] == res["snapshot_id"] and row["is_anomalous"] == 0
+
+
+def test_abnormal_flagged_and_hidden_from_llm(run_id, monkeypatch):
+    use_mock(monkeypatch, "abnormal")
+    res = weather.get_weather_forecast("hue", DAY, run_id)
+    assert res["status"] == "anomalous" and "temp_max_c" not in res and "precip_mm" not in res
+    row = repo.weather_for_run(run_id)[DAY]
+    assert row["is_anomalous"] == 1 and row["temp_max_c"] == 48.0  # snapshot giữ số gốc để truy vết
+    assert "48.0 °C" in row["anomaly_reason"] and "mưa âm" in row["anomaly_reason"]
 
 
 def test_timeout_retries_then_no_forecast(run_id, monkeypatch):
