@@ -97,6 +97,10 @@ def retry_delay(error, attempt):
                         seconds = None
                     if seconds is not None:
                         hints.append(seconds)
+                elif key.lower() == "x-ratelimit-reset":  # OpenRouter: epoch ms; hết quota ngày → chờ > 60s → dừng ngay
+                    reset_ms = _seconds(value)
+                    if reset_ms is not None:
+                        hints.append(max(0, reset_ms / 1000 - datetime.now(UTC).timestamp()))
                 elif isinstance(value, (dict, list)):
                     pending.append(value)
     return max(hints) + 1 if hints else min(15 * 2 ** attempt, MAX_RETRY_WAIT_SECONDS)

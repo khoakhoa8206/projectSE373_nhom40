@@ -165,6 +165,13 @@ def test_retry_hint_formats(headers, body, expected):
     assert llm_requests.retry_delay(error, 0) == expected
 
 
+def test_openrouter_daily_quota_reset_stops_retry():
+    reset = int((datetime.now(UTC) + timedelta(hours=10)).timestamp() * 1000)
+    body = {"error": {"code": 429, "metadata": {"headers": {"X-RateLimit-Reset": str(reset)}}}}
+    response = httpx.Response(429, request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"))
+    assert llm_requests.retry_delay(RateLimitError("test", response=response, body=body), 0) > 60
+
+
 def test_retry_after_http_date():
     date = format_datetime(datetime.now(UTC) + timedelta(seconds=20), usegmt=True)
     response = httpx.Response(429, headers={"Retry-After": date}, request=httpx.Request("POST", GOOGLE_URL))
