@@ -1,0 +1,31 @@
+poi_id,destination_id,name_vi,name_en,category,lat,lon,opening_hours,ticket_price_vnd,avg_visit_minutes,is_outdoor,min_age,walking_level,tags,source_url,license,verified_at
+hue-chua-thien-mu,hue,Chùa Thiên Mụ,Thien Mu Pagoda,attraction,16.45355,107.54461,,,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#See,CC-BY-SA-4.0,2026-10-25
+hue-dai-noi,hue,Đại Nội Huế,Imperial City of Hue,attraction,16.46955,107.57782,,,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Imperial_Citadel,CC-BY-SA-4.0,2026-10-25
+hue-lang-tu-duc,hue,Lăng Tự Đức,Tomb of Tu Duc,attraction,16.4332,107.5653,,,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Tombs_of_the_Emperors,CC-BY-SA-4.0,2026-10-25
+hue-lang-khai-dinh,hue,Lăng Khải Định,Tomb of Khai Dinh,attraction,16.39892,107.59028,,,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Tombs_of_the_Emperors,CC-BY-SA-4.0,2026-10-25
+hue-bao-tang-ho-chi-minh,hue,Bảo tàng Hồ Chí Minh,Ho Chi Minh Museum,attraction,16.45962495,107.58110825,"Mo-Su 08:00-11:00, 14:00-16:45",,,,,,"[""history""]",https://www.openstreetmap.org/way/240266284,ODbL-1.0,2026-10-25
+hue-bao-tang-co-vat,hue,Bảo tàng Cổ vật Cung đình Huế,Hue Royal Antiquities Museum,attraction,16.47130735,107.5819424,"Mo-Su 08:30-11:00, 13:30-17:00",,,,,,"[""history""]",https://www.openstreetmap.org/way/695810710,ODbL-1.0,2026-10-25
+hue-diem-phung-thi,hue,Trung tâm Nghệ thuật Điềm Phùng Thị,Diem Phung Thi art foundation,attraction,16.46697155,107.5895601,Tu-Su 07:30-11:30; 13:30-17:00,,,,,,"[""history""]",https://www.openstreetmap.org/way/118540998,ODbL-1.0,2026-10-25
+hue-chua-bao-quoc,hue,Chùa Báo Quốc,Báo Quốc Temple,attraction,16.4542377,107.57968205,,,,,,,"[""history""]",https://www.openstreetmap.org/way/1170979640,ODbL-1.0,2026-10-25
+hue-chua-dieu-de,hue,Quoc Tu Dieu De,Dieu De National Pagoda,attraction,16.477855599999998,107.5874206,,,,,,,"[""history""]",https://www.openstreetmap.org/way/771244228,ODbL-1.0,2026-10-25
+hue-cau-thanh-toan,hue,Cầu ngói Thanh Toàn,Thanh Toan Bridge,attraction,16.4667921,107.6426953,,,,,,,"[""history""]",https://www.openstreetmap.org/way/683524977,ODbL-1.0,2026-10-25
+hue-vien-co-mat,hue,Viện Cơ Mật - Tam Toà,,attraction,16.47195935,107.583647,,,,,,,"[""history""]",https://www.openstreetmap.org/way/695810698,ODbL-1.0,2026-10-25
+hue-lang-huong-thuy-xuan,hue,Làng hương Thủy Xuân,,attraction,16.43399945,107.56268935,,,,,,,"[""history""]",https://www.openstreetmap.org/way/1473275556,ODbL-1.0,2026-10-25
+hue-bia-quoc-hoc,hue,Quoc Hoc,Quoc Hoc Memorial,attraction,16.4609446,107.5825343,,,,,,,"[""history""]",https://www.openstreetmap.org/node/5299153429,ODbL-1.0,2026-10-25
+hue-quoc-tu-giam,hue,Quốc Tử Giám,Imperial Academy,attraction,16.47059775,107.58248660000001,,,,,,,"[""history""]",https://www.openstreetmap.org/way/531031518,ODbL-1.0,2026-10-25
+hue-dien-thai-hoa,hue,Điện Thái Hòa,Thai Hoa Hall,attraction,16.468743449999998,107.5783867,,,,,,,"[""history""]",https://www.openstreetmap.org/way/531031566,ODbL-1.0,2026-10-25
+hue-quan-hanh,hue,Quán Hạnh,Hanh Restaurant,food,16.4662679,107.5951097,,,,,,,"[""food""]",https://www.openstreetmap.org/node/4693154298,ODbL-1.0,2026-10-25
+hue-madam-thu,hue,Madam Thu,,food,16.4698038,107.5957839,Mo-Su 08:00-22:00,,,,,,"[""food""]",https://www.openstreetmap.org/node/5243743124,ODbL-1.0,2026-10-25
+hue-lac-thien,hue,Lạc Thiện,,food,16.4687306,107.5851255,,,,,,,"[""food""]",https://www.openstreetmap.org/node/4836391621,ODbL-1.0,2026-10-25
+hue-lac-thanh,hue,Lạc Thanh,,food,16.4686511,107.5851849,,,,,,,"[""food""]",https://www.openstreetmap.org/node/5380973122,ODbL-1.0,2026-10-25
+hue-com-hen-hoa-dong,hue,Cơm hến Hoa Đông,,food,16.47932,107.5935644,Mo-Su 07:00-21:30,,,,,,"[""food""]",https://www.openstreetmap.org/node/7223176485,ODbL-1.0,2026-10-25
+hue-chay-thanh-lieu,hue,Quán Chay Thanh Liễu,Quan Chay Thanh Lieu,food,16.4709827,107.5977764,,,,,,,"[""food""]",https://www.openstreetmap.org/node/4634514389,ODbL-1.0,2026-10-25
+hue-san-may,hue,Sân Mây Huế,,food,16.4825734,107.5970992,Mo-Su 07:00-21:00,,,,,,"[""food"", ""vegetarian""]",https://www.openstreetmap.org/node/6157857785,ODbL-1.0,2026-10-25
+hue-loving-hut,hue,Loving Hut,,food,16.4505499,107.6047746,Mo-Su 07:00-21:00,,,,,,"[""food"", ""vegetarian""]",https://www.openstreetmap.org/node/7103878786,ODbL-1.0,2026-10-25
+hue-lien-hoa,hue,Lien Hoa,,food,16.4650438,107.5972517,Mo-Su 06:30-21:00,,,,,,"[""food""]",https://www.openstreetmap.org/node/11914764769,ODbL-1.0,2026-10-25
+hue-spice-viet,hue,Spice Viet,,food,16.4608913,107.5915617,,,,,,,"[""food""]",https://www.openstreetmap.org/node/12412512101,ODbL-1.0,2026-10-25
+hue-saigon-morin,hue,Hotel Saigon Morin,,lodging,16.466576349999997,107.59029964999999,,,,,,,"[""lodging""]",https://www.openstreetmap.org/way/239566031,ODbL-1.0,2026-10-25
+hue-indochine-palace,hue,Khách sạn Indochine Palace,Indochine Palace,lodging,16.46140935,107.59816695,,,,,,,"[""lodging""]",https://www.openstreetmap.org/way/240131252,ODbL-1.0,2026-10-25
+hue-la-residence,hue,La Résidence,,lodging,16.459087750000002,107.5801224,,,,,,,"[""lodging""]",https://www.openstreetmap.org/way/240266283,ODbL-1.0,2026-10-25
+hue-silk-path,hue,Silk Path Grand Hue Hotel,,lodging,16.45766795,107.58010135,,,,,,,"[""lodging""]",https://www.openstreetmap.org/way/251616147,ODbL-1.0,2026-10-25
+hue-senna,hue,Senna Hue Hotel,,lodging,16.465865049999998,107.59358019999999,,,,,,,"[""lodging""]",https://www.openstreetmap.org/way/1280445132,ODbL-1.0,2026-10-25

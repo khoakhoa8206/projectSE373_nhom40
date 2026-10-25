@@ -1,0 +1,383 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.592263,
+              16.4669728
+            ],
+            [
+              107.5926883,
+              16.4673611
+            ],
+            [
+              107.5926021,
+              16.4674422
+            ],
+            [
+              107.5926626,
+              16.4674964
+            ],
+            [
+              107.5925104,
+              16.4676637
+            ],
+            [
+              107.591409,
+              16.4667356
+            ],
+            [
+              107.5919902,
+              16.4661961
+            ],
+            [
+              107.5921745,
+              16.4663618
+            ],
+            [
+              107.592285,
+              16.4662389
+            ],
+            [
+              107.5926716,
+              16.4665515
+            ],
+            [
+              107.592263,
+              16.4669728
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "zone_id": "hue-osm-military-1033694882",
+        "destination_id": "hue",
+        "name": "Vùng landuse=military OSM 1033694882",
+        "zone_type": "military",
+        "active_from": null,
+        "active_to": null,
+        "reason": "OSM gắn landuse=military: loại khỏi gợi ý du lịch; không phải xác nhận pháp lý thực địa.",
+        "source_url": "https://www.openstreetmap.org/way/1033694882",
+        "license": "ODbL-1.0",
+        "verified_at": "2026-10-25"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.5769831,
+              16.4576946
+            ],
+            [
+              107.5768225,
+              16.4569364
+            ],
+            [
+              107.5761322,
+              16.4569644
+            ],
+            [
+              107.575767,
+              16.4576071
+            ],
+            [
+              107.5759131,
+              16.4576071
+            ],
+            [
+              107.5759387,
+              16.4577927
+            ],
+            [
+              107.5762637,
+              16.4577752
+            ],
+            [
+              107.576302,
+              16.4579871
+            ],
+            [
+              107.5769831,
+              16.4576946
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "zone_id": "hue-osm-military-1172668060",
+        "destination_id": "hue",
+        "name": "Vùng landuse=military OSM 1172668060",
+        "zone_type": "military",
+        "active_from": null,
+        "active_to": null,
+        "reason": "OSM gắn landuse=military: loại khỏi gợi ý du lịch; không phải xác nhận pháp lý thực địa.",
+        "source_url": "https://www.openstreetmap.org/way/1172668060",
+        "license": "ODbL-1.0",
+        "verified_at": "2026-10-25"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.6634972,
+              16.4009695
+            ],
+            [
+              107.6669881,
+              16.401191
+            ],
+            [
+              107.6684469,
+              16.4009001
+            ],
+            [
+              107.6701222,
+              16.4002467
+            ],
+            [
+              107.6730271,
+              16.4009871
+            ],
+            [
+              107.6729977,
+              16.4033725
+            ],
+            [
+              107.6727561,
+              16.4042147
+            ],
+            [
+              107.6711592,
+              16.4043956
+            ],
+            [
+              107.667559,
+              16.4040508
+            ],
+            [
+              107.6662981,
+              16.4041017
+            ],
+            [
+              107.6630396,
+              16.4036043
+            ],
+            [
+              107.6634972,
+              16.4009695
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "zone_id": "hue-osm-military-1332926251",
+        "destination_id": "hue",
+        "name": "Trung đoàn Bộ binh 176",
+        "zone_type": "military",
+        "active_from": null,
+        "active_to": null,
+        "reason": "OSM gắn landuse=military: loại khỏi gợi ý du lịch; không phải xác nhận pháp lý thực địa.",
+        "source_url": "https://www.openstreetmap.org/way/1332926251",
+        "license": "ODbL-1.0",
+        "verified_at": "2026-10-25"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.6722152,
+              16.3760545
+            ],
+            [
+              107.6781847,
+              16.3773716
+            ],
+            [
+              107.6843394,
+              16.3777564
+            ],
+            [
+              107.6845862,
+              16.3798579
+            ],
+            [
+              107.6833985,
+              16.3842236
+            ],
+            [
+              107.6835682,
+              16.384786
+            ],
+            [
+              107.6840772,
+              16.3856443
+            ],
+            [
+              107.6854809,
+              16.3871538
+            ],
+            [
+              107.6850027,
+              16.3885301
+            ],
+            [
+              107.6841697,
+              16.3899951
+            ],
+            [
+              107.6822262,
+              16.3928068
+            ],
+            [
+              107.6813932,
+              16.3938279
+            ],
+            [
+              107.6806682,
+              16.3949081
+            ],
+            [
+              107.6803523,
+              16.3959178
+            ],
+            [
+              107.6800146,
+              16.3965507
+            ],
+            [
+              107.6790936,
+              16.3976229
+            ],
+            [
+              107.6785378,
+              16.3980119
+            ],
+            [
+              107.6775021,
+              16.3983319
+            ],
+            [
+              107.6758204,
+              16.3985777
+            ],
+            [
+              107.6746548,
+              16.3986923
+            ],
+            [
+              107.6735988,
+              16.3987706
+            ],
+            [
+              107.6730323,
+              16.3958323
+            ],
+            [
+              107.6732163,
+              16.3942783
+            ],
+            [
+              107.672359,
+              16.3912452
+            ],
+            [
+              107.6709167,
+              16.3848588
+            ],
+            [
+              107.6717398,
+              16.3844907
+            ],
+            [
+              107.6718551,
+              16.3780892
+            ],
+            [
+              107.6722152,
+              16.3760545
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "zone_id": "hue-osm-military-1346325479",
+        "destination_id": "hue",
+        "name": "Vùng landuse=military OSM 1346325479",
+        "zone_type": "military",
+        "active_from": null,
+        "active_to": null,
+        "reason": "OSM gắn landuse=military: loại khỏi gợi ý du lịch; không phải xác nhận pháp lý thực địa.",
+        "source_url": "https://www.openstreetmap.org/way/1346325479",
+        "license": "ODbL-1.0",
+        "verified_at": "2026-10-25"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.6559724,
+              16.5531379
+            ],
+            [
+              107.6559989,
+              16.5526019
+            ],
+            [
+              107.6566963,
+              16.5526572
+            ],
+            [
+              107.6566251,
+              16.5532382
+            ],
+            [
+              107.6564807,
+              16.5531672
+            ],
+            [
+              107.6561955,
+              16.5531508
+            ],
+            [
+              107.6559724,
+              16.5531379
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "zone_id": "hue-osm-military-1493416350",
+        "destination_id": "hue",
+        "name": "Vietnamese Border Guard",
+        "zone_type": "military",
+        "active_from": null,
+        "active_to": null,
+        "reason": "OSM gắn landuse=military: loại khỏi gợi ý du lịch; không phải xác nhận pháp lý thực địa.",
+        "source_url": "https://www.openstreetmap.org/way/1493416350",
+        "license": "ODbL-1.0",
+        "verified_at": "2026-10-25"
+      }
+    }
+  ]
+}

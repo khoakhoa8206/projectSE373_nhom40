@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic_core import to_jsonable_python
 
-from agent.schemas import Itinerary, TripProfile, Violation
+from agent.schemas import POI, Itinerary, TripProfile, Violation
 from agent.src.obs.trace import mask_coords, write_jsonl
 
 VN = timezone(timedelta(hours=7))  # Việt Nam không có giờ mùa hè
@@ -134,6 +134,7 @@ def weather_for_run(run_id):
 def save_itinerary(it: Itinerary, history: list[tuple[int, Violation]]):
     """Lưu lịch trình cuối + vi phạm của mọi vòng (vòng trước vòng cuối = đã sửa). Tổng tiền do code cộng."""
     slot_ids = {s.slot_id for s in it.slots}
+    known_costs = [s.cost_vnd for s in it.slots if s.cost_vnd is not None]
     with closing(get_conn()) as conn, conn:
         version = conn.execute(
             "SELECT COALESCE(MAX(version), 0) + 1 FROM itineraries WHERE trip_id = ?", (it.trip_id,)
@@ -143,7 +144,8 @@ def save_itinerary(it: Itinerary, history: list[tuple[int, Violation]]):
             """INSERT INTO itineraries (itinerary_id, trip_id, profile_id, version, status, planner_rounds,
                    total_cost_vnd, has_unpriced_item, run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (it.itinerary_id, it.trip_id, it.profile_id, version, it.status, it.planner_rounds,
-             sum(s.cost_vnd or 0 for s in it.slots), int(any(s.cost_source == "unverified" for s in it.slots)),
+              sum(known_costs) if known_costs else None,
+              int(any(s.poi_id and s.cost_source == "unverified" for s in it.slots)),
              it.run_id, now()),
         )  # fmt: skip
         conn.executemany(
@@ -178,3 +180,80 @@ def itinerary_for_trip(trip_id):
         "SELECT * FROM validation_violations WHERE itinerary_id = ? AND resolved = 0", (it["itinerary_id"],)
     )
     return it
+
+def _upsert_hue_pois(conn, pois: list[POI]) -> int:
+    """Nạp POI trên transaction do caller quản lý."""
+    if not pois:
+        raise ValueError("Không có POI để nạp.")
+    if any(poi.destination_id != "hue" for poi in pois):
+        raise ValueError("Chỉ nhận POI thuộc Huế.")
+
+    columns = list(POI.model_fields)
+    column_names = ", ".join(columns)
+    placeholders = ", ".join(f":{column}" for column in columns)
+    updates = ", ".join(
+        f"{column} = excluded.{column}"
+        for column in columns
+        if column not in ("poi_id", "destination_id")
+    )
+    sql = (
+        f"INSERT INTO pois ({column_names}) VALUES ({placeholders}) "
+        f"ON CONFLICT(poi_id) DO UPDATE SET {updates}"
+    )
+
+    conn.execute(
+        """INSERT INTO destinations (destination_id, name_vi, name_en)
+           VALUES (?, ?, ?) ON CONFLICT(destination_id) DO NOTHING""",
+        ("hue", "Huế", "Hue"),
+    )
+    for poi in pois:
+        existing = conn.execute("SELECT destination_id FROM pois WHERE poi_id = ?", (poi.poi_id,)).fetchone()
+        if existing and existing["destination_id"] != "hue":
+            raise ValueError(f"Mã POI đã thuộc điểm đến khác: {poi.poi_id}")
+        row = poi.model_dump()
+        row["tags"] = json.dumps(poi.tags, ensure_ascii=False)
+        conn.execute(sql, row)
+
+    return len(pois)
+
+
+def save_hue_pois(pois: list[POI]) -> int:
+    """Nạp POI Huế trong một transaction; mã đã có thì cập nhật."""
+    with closing(get_conn()) as conn, conn:
+        return _upsert_hue_pois(conn, pois)
+
+
+def save_hue_destination(pois: list[POI], zones: list[dict], matrix: list[dict]) -> dict:
+    """Nạp bundle đã kiểm tra nguyên tử; không xoá POI cũ hoặc dữ liệu chuyến đi."""
+    with closing(get_conn()) as conn, conn:
+        count = _upsert_hue_pois(conn, pois)
+        for zone in zones:
+            existing = conn.execute("SELECT destination_id FROM restricted_zones WHERE zone_id = ?",
+                                    (zone["zone_id"],)).fetchone()
+            if existing and existing[0] != "hue":
+                raise ValueError("Mã vùng đã thuộc điểm đến khác.")
+            conn.execute(
+                """INSERT INTO restricted_zones (zone_id, destination_id, name, zone_type, geometry, active_from,
+                       active_to, reason, source_url, license, verified_at)
+                   VALUES (:zone_id, :destination_id, :name, :zone_type, :geometry, :active_from, :active_to,
+                       :reason, :source_url, :license, :verified_at)
+                   ON CONFLICT(zone_id) DO UPDATE SET name=excluded.name, zone_type=excluded.zone_type,
+                       geometry=excluded.geometry, active_from=excluded.active_from, active_to=excluded.active_to,
+                       reason=excluded.reason, source_url=excluded.source_url, license=excluded.license,
+                       verified_at=excluded.verified_at""", zone,
+            )
+        conn.executemany(
+            """INSERT INTO travel_matrix (from_poi_id, to_poi_id, mode, minutes, distance_m, provider, computed_at)
+               VALUES (:from_poi_id, :to_poi_id, :mode, :minutes, :distance_m, :provider, :computed_at)
+               ON CONFLICT(from_poi_id, to_poi_id, mode) DO UPDATE SET minutes=excluded.minutes,
+                   distance_m=excluded.distance_m, provider=excluded.provider, computed_at=excluded.computed_at""", matrix,
+        )
+    return {"pois": count, "zones": len(zones), "travel_pairs": len(matrix)}
+
+
+def destination_facts() -> dict:
+    """Snapshot chỉ đọc cho validator; không mạng, không ghi, không log toạ độ người dùng."""
+    with closing(get_conn()) as conn, conn:
+        return {"pois": {r["poi_id"]: dict(r) for r in conn.execute("SELECT * FROM pois")},
+                "matrix": [dict(r) for r in conn.execute("SELECT * FROM travel_matrix")],
+                "zones": [dict(r) for r in conn.execute("SELECT * FROM restricted_zones")]}
