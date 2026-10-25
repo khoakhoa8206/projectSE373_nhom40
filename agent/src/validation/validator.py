@@ -138,9 +138,10 @@ def validate_with_facts(itinerary: Itinerary, profile: TripProfile, weather: dic
         last_poi = None
         for slot in slots:
             poi = facts["pois"].get(slot.poi_id)
+            duration = minutes(slot.end_time) - minutes(slot.start_time)
+            # Khớp scorer: mọi slot (kể cả ăn/nghỉ/tự do) + di chuyển đều tính vào thời lượng ngày.
+            activity_minutes += duration + (slot.travel_minutes_from_prev or 0)
             if poi:
-                duration = minutes(slot.end_time) - minutes(slot.start_time)
-                activity_minutes += duration + (slot.travel_minutes_from_prev or 0)
                 attractions += poi.get("category") == "attraction"
                 # Điểm tham quan chưa rõ outdoor không được mặc định an toàn trong mưa lớn; quán ăn/lưu trú thì không tính.
                 if poi.get("is_outdoor") in (1, True) or (poi.get("is_outdoor") is None and poi.get("category") == "attraction"):
@@ -156,8 +157,8 @@ def validate_with_facts(itinerary: Itinerary, profile: TripProfile, weather: dic
         pace = profile.pace or "moderate"
         if activity_minutes > PACE_MINUTES[pace] or walking_m > PACE_WALK_M[pace]:
             violations.append(_violation("overload", (
-                f"Ngày {day}: {activity_minutes} phút hoạt động + di chuyển, tối đa {PACE_MINUTES[pace]} với pace={pace}; "
-                "rút ngắn/bớt slot.")))
+                f"Ngày {day}: {activity_minutes} phút (tổng mọi slot kể cả ăn/nghỉ + di chuyển), tối đa "
+                f"{PACE_MINUTES[pace]} với pace={pace}; rút ngắn/bớt slot, không chèn slot nghỉ dài.")))
         if attractions > PACE_ATTRACTIONS[pace]:
             violations.append(_violation("overload", (
                 f"Ngày {day}: {attractions} điểm tham quan, tối đa {PACE_ATTRACTIONS[pace]} với pace={pace}.")))

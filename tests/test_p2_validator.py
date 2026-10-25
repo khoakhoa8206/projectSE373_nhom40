@@ -197,3 +197,10 @@ def test_fill_facts_overrides_llm_numbers(facts):
     assert [(s.cost_vnd, s.cost_source, s.hours_status, s.travel_minutes_from_prev) for s in slots] == [
         (200, "tool", "verified", None), (None, "unverified", "not_applicable", None), (None, "unverified", "verified", 30)]
     assert fabrication_with_facts(Itinerary(slots=slots), facts, people=2) == []
+
+
+def test_pace_counts_rest_slots_like_scorer(profile, facts):
+    profile.pace = "relaxed"
+    rest = {"cost_vnd": None, "cost_source": "unverified", "hours_status": "not_applicable"}
+    it = Itinerary(slots=[slot(start="08:00", end="10:00"), slot(None, "10:00", "14:01", **rest)])
+    assert "overload" in rules(it, profile, facts)  # 120 + 241 phút nghỉ = 361 > 360

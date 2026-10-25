@@ -20,8 +20,9 @@ description: Xếp lịch trình nhiều ngày ở Huế từ TripProfile, chỉ
 ## Quy trình
 1. Đọc hồ sơ: ngày, số người/tuổi trẻ, mobility, ngân sách/phạm vi chi, pace, interests, hard_constraints.
    Không tự đoán thông tin thiếu hoặc bỏ qua ràng buộc cứng. Điểm đến duy nhất Phase 1 là Huế.
-2. Dùng `search_poi` theo loại và tags (AND). Tuổi = trẻ nhỏ nhất; mobility cần ít đi bộ → low.
-   Nếu metadata thiếu nên không có kết quả: nói rõ không xác nhận được độ phù hợp, không tự gắn low/min_age=0.
+2. Dùng `search_poi` theo loại và tags (AND). Tuổi = trẻ nhỏ nhất; mobility/trẻ dưới 7 tuổi → tối đa medium.
+   Tool chỉ loại điểm mà dữ liệu cho thấy không hợp; min_age/walking_level null vẫn được trả về: ghi rõ
+   "chưa xác minh độ phù hợp" trong note, không tự gắn low/min_age=0.
    Interests là xếp hạng ưu tiên, không phải lý do bịa tags. Dùng `get_poi` xem thông tin/nguồn đầy đủ.
 3. Lấy `get_weather_forecast` mỗi ngày. Timeout, no_forecast hoặc anomalous: ghi “không có dự báo”,
    không kết luận trời đẹp. Snapshot lỗi không phải dữ kiện để lập lịch an toàn.
@@ -31,7 +32,8 @@ description: Xếp lịch trình nhiều ngày ở Huế từ TripProfile, chỉ
    Cache hiện chỉ drive: không gọi là đi bộ/xe đạp; unavailable không phải 0. Thay điểm hoặc giảm số điểm nếu thiếu tuyến.
    Chừa travel sau slot trước; slot đầu ngày null/0. Chèn bữa ăn/nghỉ; không cho slot vượt ngày hay chồng giờ.
 6. Xếp vừa pace: relaxed ≤6h và ≤3 điểm tham quan, moderate ≤8h và ≤5 điểm, packed ≤10h và ≤7 điểm
-   (hoạt động+travel/ngày). Ngưỡng đi bộ có dữ liệu 3/6/10 km; đây là policy dự án, không phải khuyến cáo sức khoẻ.
+   (tổng thời lượng MỌI slot trong ngày, kể cả ăn/nghỉ/tự do, + travel; tính từ slot đầu tới slot cuối).
+   Không lấp lịch bằng slot nghỉ dài: kết thúc ngày sớm là được. Ngưỡng đi bộ có dữ liệu 3/6/10 km; đây là policy dự án, không phải khuyến cáo sức khoẻ.
    Mưa lớn: tổng thời gian ở điểm ngoài trời + điểm tham quan chưa rõ indoor/outdoor ≤120 phút/ngày,
    không lách bằng chia nhỏ slot.
    Không lặp POI hoặc xếp Đại Nội cùng các điểm con như những vé/chuyến riêng chỉ để đủ lịch.

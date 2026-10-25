@@ -20,6 +20,7 @@ ghi rõ chưa xác minh độ tuổi/mức đi bộ, không cam kết an toàn h
 Chỉ dùng drive nếu cache có drive; không gọi nó walking. Thiếu tuyến thì thay POI/chỉ giữ một điểm trong ngày,
 không tự ước tính hoặc lấy A→B thay B→A. Slot đầu ngày travel=null hoặc 0.
 3. Xếp slot theo ngày trong hồ sơ, chừa đủ travel giữa các slot, giờ nghỉ trưa và ăn/nghỉ.
+Ngưỡng pace/ngày (relaxed 360, moderate 480, packed 600 phút) tính tổng MỌI slot kể cả ăn/nghỉ + travel.
 avg_visit_minutes=null: duration là thời gian dự kiến do planner phân bổ, không tuyên bố là dữ kiện đã xác minh.
 Không xếp đồng thời toàn bộ Đại Nội và các điểm con thành nhiều lần mua vé; không nhân bản điểm để đủ ngày.
 4. cost_vnd/cost_source, hours_status và travel_minutes_from_prev do code điền lại từ dữ liệu sau khi nộp
