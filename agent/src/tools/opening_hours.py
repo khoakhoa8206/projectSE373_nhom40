@@ -46,9 +46,8 @@ def opening_intervals(raw: str | None, on_date: date) -> list[tuple[int, int]] |
             match = RULE.fullmatch(part.strip())
             if not match:
                 return None
+            # Theo đặc tả OSM: rule không ghi thứ áp dụng mọi ngày và ghi đè rule trước (khớp scorer).
             weekdays = _weekdays(match["days"])
-            if rules and match["days"] is None and match["times"] not in ("off", "closed"):
-                return None  # không tự suy đoán ngày áp dụng của rule giờ rời rạc
             intervals = []
             if match["times"] not in ("off", "closed"):
                 for interval in match["times"].split(","):

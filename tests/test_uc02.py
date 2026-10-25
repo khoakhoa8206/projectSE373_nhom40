@@ -91,7 +91,7 @@ def test_graph_runs_with_fake_tools(db):
     assert (run["status"], run["tokens_in"], run["tokens_out"]) == ("succeeded", 200, 100)
 
     it = repo.query("SELECT * FROM itineraries WHERE itinerary_id = ?", (res["itinerary_id"],))[0]
-    assert (it["planner_rounds"], it["total_cost_vnd"], it["has_unpriced_item"]) == (1, 100000, 1)
+    assert (it["planner_rounds"], it["total_cost_vnd"], it["has_unpriced_item"]) == (1, 200000, 1)  # 100000/người × 2 người lớn
     slots = repo.query("SELECT slot_id, poi_id FROM itinerary_slots WHERE itinerary_id = ? ORDER BY slot_id",
                        (res["itinerary_id"],))  # fmt: skip
     assert slots == [{"slot_id": f"{res['itinerary_id']}:d1-s1", "poi_id": "hue-dai-noi"},

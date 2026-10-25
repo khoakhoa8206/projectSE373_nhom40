@@ -17,18 +17,18 @@ def test_detail_and_search_keep_unknown(db):
 
 
 def test_search_filters_and_unknown_metadata(db):
-    assert search_poi("hue", child_age=6) == []
-    assert search_poi("hue", outdoor=False) == []
-    assert search_poi("hue", max_walking_level="low") == []
+    # metadata null không bị loại (planner ghi "chưa xác minh"); chỉ loại khi dữ liệu cho thấy không hợp
+    assert len(search_poi("hue", child_age=6, outdoor=False, max_walking_level="low")) == 2
     repo.query("UPDATE pois SET min_age=3, walking_level='low', is_outdoor=0, tags='[\"history\",\"craft\"]' "
                "WHERE poi_id='hue-dai-noi'")
     assert len(search_poi("hue", child_age=6, max_walking_level="low", outdoor=False, tags=["history", "craft"])) == 1
-    assert search_poi("hue", child_age=2) == []
+    assert [p["poi_id"] for p in search_poi("hue", child_age=2)] == ["hue-cho-dong-ba"]
+    assert [p["poi_id"] for p in search_poi("hue", outdoor=True)] == ["hue-cho-dong-ba"]
     assert search_poi("hue", tags=["history", "missing"]) == []
 
 
 @pytest.mark.parametrize("kwargs", [
-    {"limit": 0}, {"limit": 101}, {"limit": True}, {"limit": 1.5}, {"category": "other"},
+    {"limit": 0}, {"limit": 21}, {"limit": True}, {"limit": 1.5}, {"category": "other"},
     {"child_age": -1}, {"child_age": True}, {"max_walking_level": "tiny"},
     {"outdoor": "false"}, {"tags": "history"}, {"tags": [""]},
 ])
@@ -47,10 +47,10 @@ def test_missing_source_is_not_public(db):
 
 
 def test_hours_unknown_closed_and_split_day(db):
-    assert get_opening_hours("hue-dai-noi", "2026-10-26")["intervals"] is None
+    assert get_opening_hours("hue-dai-noi", "2026-10-26")["open_intervals"] is None
     repo.query("UPDATE pois SET opening_hours='Tu-Su 08:00-12:00,13:00-17:00; Mo off' WHERE poi_id='hue-dai-noi'")
     assert get_opening_hours("hue-dai-noi", "2026-10-26")["closed"] is True
-    assert get_opening_hours("hue-dai-noi", "2026-10-27")["intervals"] == [(480, 720), (780, 1020)]
+    assert get_opening_hours("hue-dai-noi", "2026-10-27")["open_intervals"] == [(480, 720), (780, 1020)]
     with pytest.raises(ValueError):
         get_opening_hours("hue-dai-noi", "not-date")
 

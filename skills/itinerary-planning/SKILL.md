@@ -25,17 +25,19 @@ description: Xếp lịch trình nhiều ngày ở Huế từ TripProfile, chỉ
    Interests là xếp hạng ưu tiên, không phải lý do bịa tags. Dùng `get_poi` xem thông tin/nguồn đầy đủ.
 3. Lấy `get_weather_forecast` mỗi ngày. Timeout, no_forecast hoặc anomalous: ghi “không có dự báo”,
    không kết luận trời đẹp. Snapshot lỗi không phải dữ kiện để lập lịch an toàn.
-4. Với mỗi điểm, lấy `get_opening_hours(poi_id, date)`. `intervals=[]` là đóng; `null` là chưa biết;
+4. Với mỗi điểm, lấy `get_opening_hours(poi_id, date)`. `open_intervals=[]` là đóng; `null` là chưa biết;
    phút tính từ 00:00. Giờ đóng/mở và nghỉ trưa đều phải chứa TRỌN slot. Không tự hiểu cú pháp chưa hỗ trợ.
 5. Với mỗi cặp điểm liên tiếp cùng ngày, lấy `get_travel_time` đúng hướng và mode.
    Cache hiện chỉ drive: không gọi là đi bộ/xe đạp; unavailable không phải 0. Thay điểm hoặc giảm số điểm nếu thiếu tuyến.
    Chừa travel sau slot trước; slot đầu ngày null/0. Chèn bữa ăn/nghỉ; không cho slot vượt ngày hay chồng giờ.
-6. Xếp vừa pace: relaxed ≤4h, moderate ≤6h, packed ≤8h hoạt động+travel có dữ liệu/ngày.
-   Ngưỡng đi bộ có dữ liệu tương ứng 3/6/10 km; đây là policy dự án, không phải khuyến cáo sức khoẻ.
-   Mưa lớn: tổng ngoài trời + chưa rõ indoor/outdoor ≤120 phút/ngày, không lách bằng chia nhỏ slot.
+6. Xếp vừa pace: relaxed ≤6h và ≤3 điểm tham quan, moderate ≤8h và ≤5 điểm, packed ≤10h và ≤7 điểm
+   (hoạt động+travel/ngày). Ngưỡng đi bộ có dữ liệu 3/6/10 km; đây là policy dự án, không phải khuyến cáo sức khoẻ.
+   Mưa lớn: tổng thời gian ở điểm ngoài trời + điểm tham quan chưa rõ indoor/outdoor ≤120 phút/ngày,
+   không lách bằng chia nhỏ slot.
    Không lặp POI hoặc xếp Đại Nội cùng các điểm con như những vé/chuyến riêng chỉ để đủ lịch.
 7. Giá chưa biết hoặc đơn vị vé/nhóm chưa tương thích: null/unverified. `free` chỉ khi nguồn xác nhận 0.
-   Không nhân giá vé theo số người, không bịa giá bữa ăn/phòng. `total_cost_vnd` chỉ là tổng khoản biết giá;
+   Giá vé dữ liệu là giá/người: cost_vnd = ticket_price_vnd × số người trong đoàn (code tính lại khi nộp);
+   không chế mức giảm trẻ em, không bịa giá bữa ăn/phòng. `total_cost_vnd` chỉ là tổng khoản biết giá;
    chưa đủ giá không được tuyên bố ngân sách toàn chuyến đã được xác nhận.
 8. Chưa có avg_visit_minutes thì thời lượng là phân bổ dự kiến của planner, không phải giờ tham quan xác minh.
    `note` phải nói rõ giờ/giá/khả năng đi bộ chưa xác minh. Slot nghỉ: poi_id=null, cost_vnd=null,

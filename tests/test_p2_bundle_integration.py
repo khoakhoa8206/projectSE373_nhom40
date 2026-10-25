@@ -43,7 +43,7 @@ def test_real_bundle_counts_and_repeat_load(bundle):
     assert repo.query("SELECT COUNT(*) AS n FROM pois")[0]["n"] == 30
     assert repo.query("SELECT COUNT(*) AS n FROM restricted_zones")[0]["n"] == 5
     assert repo.query("SELECT COUNT(*) AS n FROM travel_matrix")[0]["n"] == 900
-    assert repo.query("SELECT COUNT(*) AS n FROM pois WHERE ticket_price_vnd IS NULL")[0]["n"] == 30
+    assert repo.query("SELECT COUNT(*) AS n FROM pois WHERE ticket_price_vnd IS NULL")[0]["n"] == 27  # 3 vé có nguồn báo chí
 
 
 def test_cli_complete(bundle, monkeypatch):
@@ -148,7 +148,8 @@ def test_api_three_days_with_real_tools(bundle, monkeypatch, condition):
     assert result["status"] == "validated" and result["error"] is None
     itinerary = client.get(f"/api/trips/{trip_id}/itinerary").json()
     assert len(itinerary["slots"]) == 3 and itinerary["has_unpriced_item"] == 1
-    assert itinerary["total_cost_vnd"] is None  # không biến mọi giá chưa biết thành "miễn phí"
+    # code điền giá từ dữ liệu (Đại Nội 200k + lăng Tự Đức 150k), Thiên Mụ chưa có giá -> has_unpriced_item
+    assert itinerary["total_cost_vnd"] == 350000
     if condition == "timeout":
         assert all("không có dự báo" in s["note"] for s in itinerary["slots"])
     events = repo.query("SELECT name FROM trace_events WHERE run_id=? AND kind='tool_call'", (result["run_id"],))

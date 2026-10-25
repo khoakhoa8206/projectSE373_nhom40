@@ -173,12 +173,12 @@ def test_previous_facts_reuse_observations_and_only_fetch_missing(db):
     state = {"run_id": run_id, "itinerary": Itinerary(slots=[first, second])}
     args = {"date": "2026-11-27", "poi_id": "hue-dai-noi"}
     repo.log_event(run_id, "plan", "tool_call", name="get_opening_hours", args=args,
-                   result={"hours_status": "unverified", "intervals": None})
+                   result={"hours_status": "unverified", "open_intervals": None})
     calls = []
 
     def get_opening_hours(poi_id: str, date: str):
         calls.append((poi_id, date))
-        return {"hours_status": "unverified", "intervals": None}
+        return {"hours_status": "unverified", "open_intervals": None}
 
     def get_travel_time(from_poi_id: str, to_poi_id: str, mode: str):
         calls.append((from_poi_id, to_poi_id, mode))
@@ -187,7 +187,7 @@ def test_previous_facts_reuse_observations_and_only_fetch_missing(db):
     tools = {"get_opening_hours": get_opening_hours, "get_travel_time": get_travel_time}
     facts = previous_facts(state, tools)
     assert len(facts) == 3 and len(calls) == 2
-    assert facts[0]["cached_from_run"] and facts[0]["result"]["intervals"] is None
+    assert facts[0]["cached_from_run"] and facts[0]["result"]["open_intervals"] is None
     assert len(previous_facts(state, tools)) == 3 and len(calls) == 2  # tool unknown cũng không hỏi lại
     assert previous_facts({"run_id": run_id}, tools) == []
 

@@ -12,7 +12,7 @@ from agent.src.validation.validator import fabrication_with_facts, validate_with
 
 @pytest.fixture
 def facts():
-    base = {"destination_id": "hue", "ticket_price_vnd": 100, "opening_hours": "Mo-Su 08:00-12:00,13:00-17:00",
+    base = {"destination_id": "hue", "category": "attraction", "ticket_price_vnd": 100, "opening_hours": "Mo-Su 08:00-12:00,13:00-17:00",
             "lat": 16.45, "lon": 107.58, "is_outdoor": 1,
             "source_url": "https://example.org/test", "license": "test-only", "verified_at": "2026-10-25"}
     return {"pois": {"a": base.copy(), "b": base.copy()}, "zones": [], "matrix": [
@@ -85,7 +85,9 @@ def test_rain_uses_daily_sum_and_unknown_outdoor(profile, facts):
 
 def test_pace_and_wrong_day(profile, facts):
     profile.pace = "relaxed"
-    it = Itinerary(slots=[slot(start="08:00", end="13:00")])
+    it = Itinerary(slots=[slot(start="08:00", end="14:00")])
+    assert "overload" not in rules(it, profile, facts)  # đúng 360 phút: còn trong ngưỡng relaxed (khớp scorer)
+    it.slots[0].end_time = "14:01"
     assert "overload" in rules(it, profile, facts)
     it.slots[0].slot_date = date(2026, 10, 27)
     assert "overlap" in rules(it, profile, facts)
@@ -142,17 +144,35 @@ def test_pure_core_does_not_mutate_inputs(profile, facts):
     assert (it, profile, facts) == before
 
 
-def test_child_and_mobility_unknown_cannot_be_approved(profile, facts):
+def test_child_and_mobility_block_only_known_mismatch(profile, facts):
     from agent.schemas import Child
 
     profile.children = [Child(age=4)]
-    profile.mobility_notes = "Cần ít đi bộ"
     it = Itinerary(slots=[slot()])
-    assert "overload" in rules(it, profile, facts)
-    facts["pois"]["a"].update(min_age=0, walking_level="low")
-    assert "overload" not in rules(it, profile, facts)
+    assert "overload" not in rules(it, profile, facts)  # metadata null: planner ghi "chưa xác minh", không chặn
     facts["pois"]["a"]["min_age"] = 6
     assert "overload" in rules(it, profile, facts)
+    facts["pois"]["a"].update(min_age=0, walking_level="high")
+    assert "overload" in rules(it, profile, facts)
+    profile.children = []
+    assert "overload" not in rules(it, profile, facts)
+    profile.mobility_notes = "Cần ít đi bộ"
+    assert "overload" in rules(it, profile, facts)
+
+
+def test_attractions_per_day_follow_pace(profile, facts):
+    facts["pois"]["a"]["ticket_price_vnd"] = 0
+    starts = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00"]
+    it = Itinerary(slots=[slot(start=t, end=t[:3] + "30", cost_vnd=0, cost_source="free") for t in starts])
+    assert "overload" in rules(it, profile, facts)  # 6 điểm > 5 của moderate
+    it.slots.pop()
+    assert "overload" not in rules(it, profile, facts)
+
+
+def test_cost_is_price_times_party(facts):
+    it = Itinerary(slots=[slot(cost_vnd=300)])
+    assert fabrication_with_facts(it, facts, people=3) == []
+    assert fabrication_with_facts(it, facts, people=1)[0].rule == "fabricated_value"
 
 
 def test_repair_feedback_contains_exact_facts(profile, facts):
@@ -164,3 +184,16 @@ def test_repair_feedback_contains_exact_facts(profile, facts):
     it = Itinerary(slots=[slot(start="11:30", end="13:30")])
     messages = [v.message for v in validate_with_facts(it, profile, {}, facts)]
     assert any("08:00-12:00" in text and "13:00-17:00" in text for text in messages)
+
+
+def test_fill_facts_overrides_llm_numbers(facts):
+    from agent.src.nodes.plan import fill_facts
+
+    facts["pois"]["b"]["ticket_price_vnd"] = None
+    slots = [slot(cost_vnd=5, hours_status="unverified", travel_minutes_from_prev=9),
+             slot(None, "10:00", "10:30", cost_vnd=None, cost_source="unverified", hours_status="unverified"),
+             slot("b", "11:00", "12:00", travel_minutes_from_prev=3)]
+    assert fill_facts(slots, 2, facts) == 3
+    assert [(s.cost_vnd, s.cost_source, s.hours_status, s.travel_minutes_from_prev) for s in slots] == [
+        (200, "tool", "verified", None), (None, "unverified", "not_applicable", None), (None, "unverified", "verified", 30)]
+    assert fabrication_with_facts(Itinerary(slots=slots), facts, people=2) == []

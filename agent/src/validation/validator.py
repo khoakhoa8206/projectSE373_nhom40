@@ -9,8 +9,23 @@ from agent.schemas import Itinerary, TripProfile, Violation
 from agent.src.tools.opening_hours import minutes, opening_intervals
 from agent.src.validation.facts import active, contains
 
-PACE_HOURS = {"relaxed": 4, "moderate": 6, "packed": 8}
+# Ngưỡng nhịp đi phải khớp evals/uc02/scorer.py (PACE_LIMITS): phút hoạt động + di chuyển, số điểm tham quan/ngày.
+PACE_MINUTES = {"relaxed": 360, "moderate": 480, "packed": 600}
+PACE_ATTRACTIONS = {"relaxed": 3, "moderate": 5, "packed": 7}
 PACE_WALK_M = {"relaxed": 3000, "moderate": 6000, "packed": 10000}
+HEAVY_RAIN_MM = 50.0
+
+
+def party_size(profile: TripProfile) -> int:
+    """Số người tính vé: giá vé dữ liệu là giá/người lớn, nhân cho cả đoàn (chưa có giá trẻ em có nguồn)."""
+    return (profile.adults or 1) + len(profile.children)
+
+
+def expected_cost(price, people):
+    """(cost_vnd, cost_source) suy từ giá dữ liệu: null = chưa xác minh, 0 = miễn phí có nguồn."""
+    if price is None:
+        return None, "unverified"
+    return (0, "free") if price == 0 else (price * people, "tool")
 
 
 def _violation(rule, message, slot=None, severity="high"):
@@ -21,8 +36,8 @@ def _pairs(facts, origin, target):
     return [row for row in facts["matrix"] if row["from_poi_id"] == origin and row["to_poi_id"] == target]
 
 
-def fabrication_with_facts(itinerary: Itinerary, facts: dict) -> list[Violation]:
-    """Core thuần: mọi con số giá và di chuyển phải đối chiếu facts; không suy luận giá nhóm."""
+def fabrication_with_facts(itinerary: Itinerary, facts: dict, people: int = 1) -> list[Violation]:
+    """Core thuần: mọi con số giá (giá dữ liệu × số người) và di chuyển phải đối chiếu facts."""
     violations = []
     previous = {}
     for slot in sorted(itinerary.slots, key=lambda s: (s.day_index, s.start_time)):
@@ -37,12 +52,11 @@ def fabrication_with_facts(itinerary: Itinerary, facts: dict) -> list[Violation]
             violations.append(_violation("fabricated_value", f"POI {slot.poi_id} không tồn tại/thiếu nguồn.", slot))
             previous[slot.day_index] = slot
             continue
-        price = poi["ticket_price_vnd"]
-        if slot.cost_source == "unverified":
-            if slot.cost_vnd is not None:
-                violations.append(_violation("fabricated_value", "Giá chưa xác minh phải là null.", slot))
-        elif price is None or slot.cost_vnd != price or (slot.cost_source == "free" and price != 0):
-            violations.append(_violation("fabricated_value", "Giá/nhãn miễn phí không khớp dữ liệu nguồn.", slot))
+        cost, source = expected_cost(poi["ticket_price_vnd"], people)
+        if (slot.cost_vnd, slot.cost_source) != (cost, source):
+            violations.append(_violation("fabricated_value", (
+                f"Giá {slot.poi_id}: slot ghi cost_vnd={slot.cost_vnd} ({slot.cost_source}); dữ liệu: "
+                f"cost_vnd={cost} ({source}), giá/người × {people} người."), slot))
         intervals = opening_intervals(poi["opening_hours"], slot.slot_date)
         if intervals is None and slot.hours_status != "unverified":
             violations.append(_violation("fabricated_value", "Giờ chưa biết/chưa parse được: hours_status=unverified.", slot))
@@ -84,11 +98,12 @@ def validate_with_facts(itinerary: Itinerary, profile: TripProfile, weather: dic
         poi = facts["pois"].get(slot.poi_id)
         if not poi:
             continue  # fabrication checker xử lý POI không tồn tại
-        if profile.children and (poi.get("min_age") is None or
-                                 poi["min_age"] > min(child.age for child in profile.children)):
-            violations.append(_violation("overload", "Chưa xác minh POI phù hợp tuổi trẻ nhỏ nhất; không tự coi unknown là an toàn.", slot))
-        if profile.mobility_notes and poi.get("walking_level") != "low":
-            violations.append(_violation("overload", "Có ghi chú mobility nhưng POI chưa xác nhận mức đi bộ low.", slot))
+        # Phase 1 chỉ chặn khi dữ liệu có nguồn cho thấy không phù hợp; metadata null được planner ghi "chưa xác minh".
+        youngest = min((child.age for child in profile.children), default=None)
+        if youngest is not None and poi.get("min_age") is not None and poi["min_age"] > youngest:
+            violations.append(_violation("overload", f"POI yêu cầu từ {poi['min_age']} tuổi, đoàn có trẻ {youngest} tuổi.", slot))
+        if poi.get("walking_level") == "high" and (profile.mobility_notes or (youngest is not None and youngest < 7)):
+            violations.append(_violation("overload", "POI có mức đi bộ high, quá sức đoàn (trẻ nhỏ/ghi chú đi lại).", slot))
         intervals = opening_intervals(poi["opening_hours"], slot.slot_date)
         start, end = minutes(slot.start_time), minutes(slot.end_time)
         if intervals is not None and not any(a <= start and end <= b for a, b in intervals):
@@ -114,10 +129,11 @@ def validate_with_facts(itinerary: Itinerary, profile: TripProfile, weather: dic
                     f"start_time của slot này sớm nhất {earliest // 60:02d}:{earliest % 60:02d}, "
                     f"không phải {current.start_time}. Dời giờ/giảm điểm, không bịa travel."), current))
         forecast = weather.get(slots[0].slot_date.isoformat(), {})
-        heavy = forecast.get("condition") == "heavy_rain" and not forecast.get("is_anomalous") and forecast.get(
-            "status", "ok") not in ("anomalous", "no_forecast")
+        heavy = (forecast.get("condition") == "heavy_rain" or (forecast.get("precip_mm") or 0) >= HEAVY_RAIN_MM) and (
+            not forecast.get("is_anomalous") and forecast.get("status", "ok") not in ("anomalous", "no_forecast"))
         outdoor_minutes = 0
         activity_minutes = 0
+        attractions = 0
         walking_m = 0
         last_poi = None
         for slot in slots:
@@ -125,8 +141,9 @@ def validate_with_facts(itinerary: Itinerary, profile: TripProfile, weather: dic
             if poi:
                 duration = minutes(slot.end_time) - minutes(slot.start_time)
                 activity_minutes += duration + (slot.travel_minutes_from_prev or 0)
-                # Unknown outdoor cũng không được mặc định an toàn trong mưa lớn.
-                if poi.get("is_outdoor") in (1, True, None):
+                attractions += poi.get("category") == "attraction"
+                # Điểm tham quan chưa rõ outdoor không được mặc định an toàn trong mưa lớn; quán ăn/lưu trú thì không tính.
+                if poi.get("is_outdoor") in (1, True) or (poi.get("is_outdoor") is None and poi.get("category") == "attraction"):
                     outdoor_minutes += duration
                 if last_poi and slot.travel_minutes_from_prev is not None:
                     matching = [p for p in _pairs(facts, last_poi, slot.poi_id)
@@ -137,8 +154,13 @@ def validate_with_facts(itinerary: Itinerary, profile: TripProfile, weather: dic
         if heavy and outdoor_minutes > 120:
             violations.append(_violation("weather", f"Ngày {day}: ngoài trời/chưa rõ outdoor {outdoor_minutes} phút >120 khi mưa lớn."))
         pace = profile.pace or "moderate"
-        if activity_minutes > PACE_HOURS[pace] * 60 or walking_m > PACE_WALK_M[pace]:
-            violations.append(_violation("overload", f"Ngày {day} vượt ngưỡng pace={pace} (hoạt động hoặc đi bộ có dữ liệu)."))
+        if activity_minutes > PACE_MINUTES[pace] or walking_m > PACE_WALK_M[pace]:
+            violations.append(_violation("overload", (
+                f"Ngày {day}: {activity_minutes} phút hoạt động + di chuyển, tối đa {PACE_MINUTES[pace]} với pace={pace}; "
+                "rút ngắn/bớt slot.")))
+        if attractions > PACE_ATTRACTIONS[pace]:
+            violations.append(_violation("overload", (
+                f"Ngày {day}: {attractions} điểm tham quan, tối đa {PACE_ATTRACTIONS[pace]} với pace={pace}.")))
     return violations
 
 
@@ -148,5 +170,6 @@ def validate(itinerary: Itinerary, profile: TripProfile, weather: dict) -> list[
 
 
 def check_fabrication(itinerary: Itinerary) -> list[Violation]:
-    """Đối chiếu POI/nhãn/giá/travel; core thuần nằm ở fabrication_with_facts."""
-    return fabrication_with_facts(itinerary, repo.destination_facts())
+    """Đối chiếu POI/nhãn/giá/travel; core thuần nằm ở fabrication_with_facts. Số người lấy từ hồ sơ của chuyến."""
+    _, profile = repo.latest_profile(itinerary.trip_id)
+    return fabrication_with_facts(itinerary, repo.destination_facts(), party_size(profile) if profile else 1)

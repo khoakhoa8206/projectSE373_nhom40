@@ -253,9 +253,16 @@ def mutate_overlap(slots):
     slots[1]["start_time"] = slots[0]["start_time"]
 
 
-def mutate_price(slots):
-    s = next(s for s in slots if s["cost_source"] == "tool")
-    s["cost_vnd"] += 10000
+def tamper_slot(where, set_sql):
+    """Sửa thẳng slot đã lưu: node plan điền lại giá từ dữ liệu nên lỗi giá do LLM không tới được DB."""
+    def after_run(run_id):
+        repo.query(f"""UPDATE itinerary_slots SET {set_sql} WHERE slot_id = (SELECT s.slot_id FROM itinerary_slots s
+                       JOIN itineraries i USING (itinerary_id) WHERE i.run_id = ? AND {where} LIMIT 1)""", (run_id,))
+
+    return after_run
+
+
+mutate_price = tamper_slot("s.cost_source = 'tool'", "cost_vnd = cost_vnd + 10000")
 
 
 def add_dai_noi_monday(slots):
@@ -263,9 +270,7 @@ def add_dai_noi_monday(slots):
     fill_dates("C04", slots)
 
 
-def price_unpriced(slots):
-    s = next(s for s in slots if s["poi_id"] == "hue-dai-noi")
-    s["cost_vnd"], s["cost_source"] = 400000, "tool"
+price_unpriced = tamper_slot("s.poi_id = 'hue-dai-noi'", "cost_vnd = 400000, cost_source = 'tool'")
 
 
 def dai_noi_rain_day(slots):
@@ -298,9 +303,9 @@ def fake_snapshot(run_id):
 
 @pytest.mark.parametrize(("case_id", "kwargs", "expected"), [
     ("C01", {"mutate": mutate_overlap}, ["validator bỏ lọt [overlap]"]),
-    ("C08", {"mutate": mutate_price}, ["validator bỏ lọt [fabricated_value]", "× 6 người"]),
+    ("C08", {"after_run": mutate_price}, ["validator bỏ lọt [fabricated_value]", "× 6 người"]),
     ("C04", {"mutate": add_dai_noi_monday}, ["[opening_hours]", "ngày đóng cửa (mon)"]),
-    ("C07", {"mutate": price_unpriced}, ["dữ liệu chưa có giá"]),
+    ("C07", {"after_run": price_unpriced}, ["dữ liệu chưa có giá"]),
     ("C03", {"mutate": dai_noi_rain_day}, ["[weather]"]),
     ("C09", {"mutate": add_after_last("hue-bai-tam-test", 60, "C09", 1)}, ["[restricted_area]"]),
     ("C05", {"mutate": add_after_last("hue-doi-vong-canh", 60, "C05", 3)}, ["yêu cầu từ 6 tuổi", "walking_level"]),

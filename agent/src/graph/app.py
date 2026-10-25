@@ -30,6 +30,7 @@ class State(TypedDict, total=False):
     best_score: tuple[int, int, int]
     planning_stopped: bool
     planning_warning: str
+    context: dict  # ứng viên + dự báo lấy ở vòng đầu, vòng sửa dùng lại
 
 
 def default_tools():

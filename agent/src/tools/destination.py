@@ -43,15 +43,15 @@ def search_poi(
     outdoor: bool | None = None,
     limit: int = 20,
 ) -> list[dict]:
-    """Tìm POI có nguồn; tags khớp TẤT CẢ; limit 1..100. Mức đi bộ/tuổi/outdoor chưa biết
-    bị loại nếu yêu cầu lọc tương ứng. Không xem metadata còn thiếu là phù hợp với trẻ hoặc ít đi bộ.
+    """Tìm POI có nguồn; tags khớp TẤT CẢ; limit 1..20. Bộ lọc mức đi bộ/tuổi/outdoor chỉ loại POI mà dữ liệu
+    cho thấy KHÔNG phù hợp; metadata null vẫn trả về và phải trình bày là chưa xác minh (không cam kết phù hợp).
     Kết quả có giá/giờ null phải được trình bày là chưa xác minh.
     """
     _identifier(destination_id, "destination_id")
     if category is not None and category not in ("attraction", "food", "lodging"):
         raise ValueError("category không hợp lệ.")
-    if type(limit) is not int or not 1 <= limit <= 100:
-        raise ValueError("limit phải là số nguyên 1..100.")
+    if type(limit) is not int or not 1 <= limit <= 20:
+        raise ValueError("limit phải là số nguyên 1..20.")
     if max_walking_level is not None and max_walking_level not in LEVELS:
         raise ValueError("max_walking_level không hợp lệ.")
     if child_age is not None and (type(child_age) is not int or not 0 <= child_age <= 17):
@@ -69,12 +69,12 @@ def search_poi(
             continue
         if tags and not set(tags) <= set(poi["tags"]):
             continue
-        if max_walking_level is not None and (poi["walking_level"] is None or
-                                              LEVELS[poi["walking_level"]] > LEVELS[max_walking_level]):
+        if max_walking_level is not None and poi["walking_level"] is not None and (
+                LEVELS[poi["walking_level"]] > LEVELS[max_walking_level]):
             continue
-        if child_age is not None and (poi["min_age"] is None or poi["min_age"] > child_age):
+        if child_age is not None and poi["min_age"] is not None and poi["min_age"] > child_age:
             continue
-        if outdoor is not None and poi["is_outdoor"] != outdoor:
+        if outdoor is not None and poi["is_outdoor"] is not None and poi["is_outdoor"] != outdoor:
             continue
         matches.append(poi)
         if len(matches) == limit:
@@ -83,7 +83,7 @@ def search_poi(
 
 
 def get_opening_hours(poi_id: str, date: str) -> dict:
-    """Giờ mở cửa cho ngày ISO YYYY-MM-DD: intervals là các cặp phút trong ngày.
+    """Giờ mở cửa cho ngày ISO YYYY-MM-DD: open_intervals là các cặp phút trong ngày.
     [] = đóng cửa; null = chưa xác minh hoặc cú pháp chưa hỗ trợ, không mặc định mở.
     Trả nguồn/ngày xác minh và opening_hours gốc; không suy đoán ngày lễ.
     """
@@ -92,7 +92,7 @@ def get_opening_hours(poi_id: str, date: str) -> dict:
         raise ValueError("date phải là YYYY-MM-DD.")
     poi = get_poi(poi_id)
     intervals = opening_intervals(poi["opening_hours"], on_date)
-    return {"poi_id": poi_id, "date": date, "opening_hours": poi["opening_hours"], "intervals": intervals,
+    return {"poi_id": poi_id, "date": date, "opening_hours": poi["opening_hours"], "open_intervals": intervals,
             "hours_status": "unverified" if intervals is None else "verified",
             "closed": None if intervals is None else not intervals,
             **{k: poi[k] for k in ("source_url", "license", "verified_at")}}

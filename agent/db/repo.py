@@ -134,7 +134,6 @@ def weather_for_run(run_id):
 def save_itinerary(it: Itinerary, history: list[tuple[int, Violation]]):
     """Lưu lịch trình cuối + vi phạm của mọi vòng (vòng trước vòng cuối = đã sửa). Tổng tiền do code cộng."""
     slot_ids = {s.slot_id for s in it.slots}
-    known_costs = [s.cost_vnd for s in it.slots if s.cost_vnd is not None]
     with closing(get_conn()) as conn, conn:
         version = conn.execute(
             "SELECT COALESCE(MAX(version), 0) + 1 FROM itineraries WHERE trip_id = ?", (it.trip_id,)
@@ -144,8 +143,8 @@ def save_itinerary(it: Itinerary, history: list[tuple[int, Violation]]):
             """INSERT INTO itineraries (itinerary_id, trip_id, profile_id, version, status, planner_rounds,
                    total_cost_vnd, has_unpriced_item, run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (it.itinerary_id, it.trip_id, it.profile_id, version, it.status, it.planner_rounds,
-              sum(known_costs) if known_costs else None,
-              int(any(s.poi_id and s.cost_source == "unverified" for s in it.slots)),
+             # tổng các khoản đã biết giá; có khoản thiếu giá thì has_unpriced_item = 1 (UI ghi "chưa có giá")
+             sum(s.cost_vnd or 0 for s in it.slots), int(any(s.cost_source == "unverified" for s in it.slots)),
              it.run_id, now()),
         )  # fmt: skip
         conn.executemany(

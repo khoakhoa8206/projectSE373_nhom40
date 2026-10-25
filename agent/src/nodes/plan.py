@@ -7,6 +7,8 @@ from itertools import groupby
 from agent.db import repo
 from agent.schemas import Itinerary
 from agent.src.graph.loop import agent_loop, load_skill, run_tool
+from agent.src.tools.opening_hours import opening_intervals
+from agent.src.validation.validator import expected_cost, party_size
 
 SKILL = "itinerary-planning"
 
@@ -20,9 +22,9 @@ không tự ước tính hoặc lấy A→B thay B→A. Slot đầu ngày travel
 3. Xếp slot theo ngày trong hồ sơ, chừa đủ travel giữa các slot, giờ nghỉ trưa và ăn/nghỉ.
 avg_visit_minutes=null: duration là thời gian dự kiến do planner phân bổ, không tuyên bố là dữ kiện đã xác minh.
 Không xếp đồng thời toàn bộ Đại Nội và các điểm con thành nhiều lần mua vé; không nhân bản điểm để đủ ngày.
-4. Giá null: cost_vnd=null, cost_source=unverified; giờ không parse được: hours_status=unverified.
-Chỉ free nếu nguồn xác nhận giá 0. Giá có đơn vị không khớp (vé người/phòng/nhóm) cũng để chưa xác minh,
-không tự nhân giá theo số người hoặc chế mức giảm trẻ em. Ghi rõ khoản chưa có giá trong note.
+4. cost_vnd/cost_source, hours_status và travel_minutes_from_prev do code điền lại từ dữ liệu sau khi nộp
+(giá vé/người × số người trong đoàn; giá null → unverified). Bạn vẫn điền theo tool, nhưng hãy dùng
+ticket_price_vnd × số người để giữ tổng chi trong ngân sách; không chế mức giảm trẻ em.
 Tổng chi do code cộng; có khoản thiếu giá thì không khẳng định toàn chuyến nằm trong ngân sách.
 5. weather thiếu/anomalous: note 'không có dự báo', không giả định trời đẹp.
 Mưa lớn: tổng outdoor + chưa rõ indoor/outdoor mỗi ngày ≤120 phút; giảm hoạt động, thêm nghỉ/tự do.
@@ -76,23 +78,29 @@ def previous_facts(state, by_name):
 
 
 def prepare_context(state, tools):
-    """Lấy ứng viên và thời tiết qua harness để trace phản ánh dữ kiện thực đã dùng."""
+    """Lấy ứng viên và thời tiết qua harness để trace phản ánh dữ kiện thực đã dùng.
+    Chỉ gọi ở vòng đầu; vòng sửa dùng lại (tránh gọi lại thời tiết, mỗi lần timeout tốn tới ~30 giây/ngày)."""
     by_name = {tool.__name__: tool for tool in tools}
+    if state.get("context"):
+        return state["context"] | {"previous_facts": previous_facts(state, by_name)}
     profile = state["profile"]
-    context = {"candidates": [], "forecasts": [], "limitations": [], "previous_facts": previous_facts(state, by_name)}
+    context = {"party_size": party_size(profile), "candidates": [], "forecasts": [], "limitations": [],
+               "previous_facts": previous_facts(state, by_name)}
     if "search_poi" in by_name:
         age = min((child.age for child in profile.children), default=None)
-        walking = "low" if profile.mobility_notes else None
-        args = {"destination_id": "hue", "limit": 30, "child_age": age, "max_walking_level": walking}
-        result, error = run_tool(by_name["search_poi"], args, state["run_id"], "plan")
-        if error:
-            context["limitations"].append(error)
-        elif result:
-            interests = set(profile.interests)
-            context["candidates"] = sorted(result, key=lambda p: (
-                -len(interests.intersection(p.get("tags", []))), p["poi_id"]))
-        else:
-            context["limitations"].append("Không có ứng viên đủ metadata cho ràng buộc tuổi/đi bộ; không được tự xác nhận phù hợp.")
+        walking = "medium" if profile.mobility_notes or (age is not None and age < 7) else None
+        for category in ("attraction", "food", "lodging"):
+            args = {"destination_id": "hue", "category": category, "limit": 20, "child_age": age,
+                    "max_walking_level": walking}
+            result, error = run_tool(by_name["search_poi"], args, state["run_id"], "plan")
+            if error:
+                context["limitations"].append(error)
+            else:
+                context["candidates"] += result or []
+        interests = set(profile.interests)
+        context["candidates"].sort(key=lambda p: (-len(interests.intersection(p.get("tags", []))), p["poi_id"]))
+        if age is not None or profile.mobility_notes:
+            context["limitations"].append("min_age/walking_level null = chưa xác minh độ phù hợp; ghi rõ trong note.")
     if "get_weather_forecast" in by_name and profile.start_date and profile.end_date:
         for index in range((profile.end_date - profile.start_date).days + 1):
             day = (profile.start_date + timedelta(days=index)).isoformat()
@@ -100,6 +108,26 @@ def prepare_context(state, tools):
                                      state["run_id"], "plan")
             context["forecasts"].append(result if not error else {"date": day, "status": "no_forecast", "reason": error})
     return context
+
+
+def fill_facts(slots, people, facts):
+    """Điền số liệu từ dữ liệu thay vì tin LLM chép/nhân: giá × số người, hours_status, travel chặng cùng ngày.
+    slots đã sắp theo (ngày, giờ). POI không có trong dữ liệu giữ nguyên để fabrication/finalize xử lý."""
+    travel = {(r["from_poi_id"], r["to_poi_id"]): r["minutes"] for r in facts["matrix"] if r["mode"] == "drive"}
+    last, changed = {}, 0
+    for s in slots:
+        before = (s.cost_vnd, s.cost_source, s.hours_status, s.travel_minutes_from_prev)
+        poi = facts["pois"].get(s.poi_id)
+        if s.poi_id is None:  # slot nghỉ / tự do
+            s.cost_vnd, s.cost_source, s.hours_status, s.travel_minutes_from_prev = None, "unverified", "not_applicable", None
+        elif poi:
+            s.cost_vnd, s.cost_source = expected_cost(poi["ticket_price_vnd"], people)
+            s.hours_status = "unverified" if opening_intervals(poi["opening_hours"], s.slot_date) is None else "verified"
+            prev = last.get(s.day_index)
+            s.travel_minutes_from_prev = None if prev is None else travel.get((prev, s.poi_id), s.travel_minutes_from_prev)
+            last[s.day_index] = s.poi_id
+        changed += before != (s.cost_vnd, s.cost_source, s.hours_status, s.travel_minutes_from_prev)
+    return changed
 
 
 def plan(state, client, tools, usage):
@@ -120,6 +148,8 @@ def plan(state, client, tools, usage):
 
     # slot_id do code gán theo thứ tự trong ngày: '<itinerary_id>:d1-s2'
     slots = sorted(draft.slots, key=lambda s: (s.day_index, s.start_time))
+    changed = fill_facts(slots, context["party_size"], repo.destination_facts())
+    repo.log_event(state["run_id"], "plan", "guardrail", name="fill_facts", result={"round": round_, "changed_slots": changed})
     no_forecast = {f.get("forecast_date", f.get("date")) for f in context["forecasts"]
                    if f.get("status") in ("no_forecast", "anomalous")}
     for slot in slots:
@@ -134,4 +164,5 @@ def plan(state, client, tools, usage):
             s.slot_id, s.itinerary_id = f"{state['itinerary_id']}:d{day}-s{i}", state["itinerary_id"]
     itinerary = Itinerary(itinerary_id=state["itinerary_id"], trip_id=state["trip_id"], profile_id=state["profile_id"],
                           run_id=state["run_id"], planner_rounds=round_, slots=slots)  # fmt: skip
-    return {"itinerary": itinerary, "round": round_}
+    context.pop("previous_facts")
+    return {"itinerary": itinerary, "round": round_, "context": context}

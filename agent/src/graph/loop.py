@@ -129,7 +129,8 @@ def agent_loop(client, system, user, tools, output: type[BaseModel], run_id, nod
                                   "Gom tra cứu độc lập vào cùng lượt tool calls, không hỏi lại facts đã có/unknown. "
                                   f"Đủ dữ kiện thì nộp {SUBMIT}, không cần dùng hết lượt.")
         force_submit = remaining <= min(2, max_turns)
-        options = {}
+        # OpenRouter tự chuyển model sau khi model đầu lỗi/bị giới hạn; Google không nhận trường này.
+        options = {"extra_body": {"models": names}} if "openrouter.ai" in str(getattr(client, "base_url", "")) else {}
         if force_submit:
             options["tool_choice"] = {"type": "function", "function": {"name": SUBMIT}}
             messages.append({"role": "user", "content": (

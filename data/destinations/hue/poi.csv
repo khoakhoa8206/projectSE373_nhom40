@@ -1,8 +1,8 @@
 poi_id,destination_id,name_vi,name_en,category,lat,lon,opening_hours,ticket_price_vnd,avg_visit_minutes,is_outdoor,min_age,walking_level,tags,source_url,license,verified_at
 hue-chua-thien-mu,hue,Chùa Thiên Mụ,Thien Mu Pagoda,attraction,16.45355,107.54461,,,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#See,CC-BY-SA-4.0,2026-10-25
-hue-dai-noi,hue,Đại Nội Huế,Imperial City of Hue,attraction,16.46955,107.57782,,,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Imperial_Citadel,CC-BY-SA-4.0,2026-10-25
-hue-lang-tu-duc,hue,Lăng Tự Đức,Tomb of Tu Duc,attraction,16.4332,107.5653,,,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Tombs_of_the_Emperors,CC-BY-SA-4.0,2026-10-25
-hue-lang-khai-dinh,hue,Lăng Khải Định,Tomb of Khai Dinh,attraction,16.39892,107.59028,,,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Tombs_of_the_Emperors,CC-BY-SA-4.0,2026-10-25
+hue-dai-noi,hue,Đại Nội Huế,Imperial City of Hue,attraction,16.46955,107.57782,,200000,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Imperial_Citadel,CC-BY-SA-4.0,2026-10-25
+hue-lang-tu-duc,hue,Lăng Tự Đức,Tomb of Tu Duc,attraction,16.4332,107.5653,,150000,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Tombs_of_the_Emperors,CC-BY-SA-4.0,2026-10-25
+hue-lang-khai-dinh,hue,Lăng Khải Định,Tomb of Khai Dinh,attraction,16.39892,107.59028,,150000,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Tombs_of_the_Emperors,CC-BY-SA-4.0,2026-10-25
 hue-bao-tang-ho-chi-minh,hue,Bảo tàng Hồ Chí Minh,Ho Chi Minh Museum,attraction,16.45962495,107.58110825,"Mo-Su 08:00-11:00, 14:00-16:45",,,,,,"[""history""]",https://www.openstreetmap.org/way/240266284,ODbL-1.0,2026-10-25
 hue-bao-tang-co-vat,hue,Bảo tàng Cổ vật Cung đình Huế,Hue Royal Antiquities Museum,attraction,16.47130735,107.5819424,"Mo-Su 08:30-11:00, 13:30-17:00",,,,,,"[""history""]",https://www.openstreetmap.org/way/695810710,ODbL-1.0,2026-10-25
 hue-diem-phung-thi,hue,Trung tâm Nghệ thuật Điềm Phùng Thị,Diem Phung Thi art foundation,attraction,16.46697155,107.5895601,Tu-Su 07:30-11:30; 13:30-17:00,,,,,,"[""history""]",https://www.openstreetmap.org/way/118540998,ODbL-1.0,2026-10-25

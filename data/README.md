@@ -45,7 +45,10 @@ way["access"="no"](16.43,107.53,16.49,107.64);
 - `name_vi` ưu tiên name:vi rồi name; nếu nguồn không có dấu/tiếng Việt, không tự sửa thành dữ kiện mới.
   Làng hương Thủy Xuân dùng name do name:vi bất nhất. Tags history/food/lodging là nhãn tuyển chọn;
   vegetarian chỉ gắn khi OSM có diet:vegetarian=only hoặc diet:vegan=only.
-- Không suy ra is_outdoor/min_age/walking_level/avg_visit_minutes từ tên. Tất cả giá hiện **NULL**.
+- Không suy ra is_outdoor/min_age/walking_level/avg_visit_minutes từ tên.
+- Giá: chỉ 3 vé lẻ người lớn có nguồn (Đại Nội 200.000, lăng Tự Đức 150.000, lăng Khải Định 150.000 VND;
+  Tuổi Trẻ 15/08/2025, giá lẻ không đổi từ 2026 theo Báo Văn hóa), ghi theo trường trong `sources_licenses.csv`
+  (`<poi_id>#ticket_price_vnd`). Còn lại **NULL**. Chạy lại `prepare_hue_data.py` sẽ xoá 3 giá này: nhập lại tay.
   Chỉ giữ opening_hours thật có trong nguồn; một số cú pháp chưa hỗ trợ sẽ trả unverified.
   Điện Thái Hoà là điểm con Đại Nội: không coi là vé độc lập hoặc đếm như một lần ghé riêng khi xếp lịch.
 
