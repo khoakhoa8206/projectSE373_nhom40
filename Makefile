@@ -5,8 +5,9 @@ PY ?= python
 
 .PHONY: db dev eval test openapi
 
-db:  ## tạo lại tourguide.db (xoá DB cũ). P2 thêm dòng nạp dữ liệu: $(PY) scripts/load_destination.py hue
+db:  ## tạo lại DB ở DB_PATH (xoá DB cũ) rồi nạp bundle Huế
 	$(PY) -m agent.db.init
+	$(PY) scripts/load_destination.py hue --complete
 
 dev:  ## mock-weather :8081 + backend :8000 + web :5173
 	$(PY) scripts/dev.py

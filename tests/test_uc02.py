@@ -3,6 +3,7 @@
 import json
 from types import SimpleNamespace as NS
 
+import pytest
 from fastapi.testclient import TestClient
 from openai.types.chat import ChatCompletion
 
@@ -13,6 +14,16 @@ from agent.src.graph import app
 from agent.src.graph.loop import SUBMIT as SUBMIT_NAME
 
 PROFILE = {"start_date": "2026-11-27", "end_date": "2026-11-27", "adults": 2, "interests": ["history", "food"]}
+
+
+@pytest.fixture(autouse=True)
+def graph_source_facts(db):
+    """Khớp dữ kiện giả trong DB với fake tools; validator thật không còn là stub."""
+    repo.query("UPDATE pois SET ticket_price_vnd = 100000 WHERE poi_id = 'hue-cho-dong-ba'")
+    repo.query("INSERT INTO travel_matrix VALUES ('hue-dai-noi', 'hue-cho-dong-ba', 'drive', 6, 1400, "
+               "'osrm', '2026-10-25T00:00:00Z')")
+
+
 ITINERARY = {"slots": [
     {"day_index": 1, "slot_date": "2026-11-27", "start_time": "10:15", "end_time": "11:15", "poi_id": "hue-cho-dong-ba",
      "activity": "Ăn sáng ở chợ Đông Ba", "travel_minutes_from_prev": 6, "cost_vnd": 100000, "cost_source": "tool",
@@ -80,7 +91,7 @@ def test_graph_runs_with_fake_tools(db):
     assert (run["status"], run["tokens_in"], run["tokens_out"]) == ("succeeded", 200, 100)
 
     it = repo.query("SELECT * FROM itineraries WHERE itinerary_id = ?", (res["itinerary_id"],))[0]
-    assert (it["planner_rounds"], it["total_cost_vnd"], it["has_unpriced_item"]) == (1, 100000, 1)
+    assert (it["planner_rounds"], it["total_cost_vnd"], it["has_unpriced_item"]) == (1, 200000, 1)  # 100000/người × 2 người lớn
     slots = repo.query("SELECT slot_id, poi_id FROM itinerary_slots WHERE itinerary_id = ? ORDER BY slot_id",
                        (res["itinerary_id"],))  # fmt: skip
     assert slots == [{"slot_id": f"{res['itinerary_id']}:d1-s1", "poi_id": "hue-dai-noi"},

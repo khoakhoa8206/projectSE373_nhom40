@@ -21,13 +21,20 @@ Không có `make` thì gõ thẳng lệnh tương ứng:
 
 | Lệnh | Tương đương | Làm gì |
 |---|---|---|
-| `make db` | `python -m agent.db.init` | Tạo lại `tourguide.db` từ `agent/db/schema.sql` (xoá DB cũ) + 3 người dùng hư cấu |
+| `make db` | `python -m agent.db.init` rồi `python scripts/load_destination.py hue --complete` | Tạo lại DB ở `DB_PATH` (xoá DB cũ), 3 người dùng hư cấu, nạp 30 POI/5 vùng/900 cặp drive |
 | `make dev` | `python scripts/dev.py` | mock-weather :8081 + backend :8000 + web :5173 |
 | `make test` | `ruff check . && pytest -q` | Lint + test (CI chạy đúng 2 lệnh này + gitleaks) |
 | `make eval` | `python -m evals.run --uc UC-02` | Chạy toàn bộ eval case, ghi `results/<id>/summary.csv` |
 | `make openapi` | xem Makefile | Sinh lại `docs/openapi.json` |
 
 Windows mà in tiếng Việt bị lỗi encoding thì đặt `PYTHONUTF8=1` (Makefile đã đặt sẵn).
+
+## Bàn giao P2
+
+Hướng dẫn chạy/kiểm tra và giới hạn: [docs/P2_HANDOFF.md](docs/P2_HANDOFF.md).
+Nguồn, attribution/giấy phép và tái tạo dữ liệu: [data/README.md](data/README.md).
+Đặc tả đúng trạng thái: [UC-01](docs/uc-01.md) (Phase 1 form, hội thoại Phase 2 chưa triển khai),
+[UC-02](docs/uc-02.md) (tool + skill + code validator/replan).
 
 ## API (Phase 1)
 

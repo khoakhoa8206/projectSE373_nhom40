@@ -271,8 +271,14 @@ function ItineraryView({ it }: { it: Itinerary }) {
         {it.status === "validated" ? `Đã qua validator sau ${it.planner_rounds} vòng` : `Còn vi phạm sau ${it.planner_rounds} vòng`}
       </p>
       <p>
-        Tổng chi phí đã có giá: <b>{vnd(it.total_cost_vnd ?? 0)}</b>
+        Tổng chi phí đã có giá: <b>{it.total_cost_vnd === null ? "Chưa có giá xác minh" : vnd(it.total_cost_vnd)}</b>
         {it.has_unpriced_item ? " + các mục chưa có giá" : ""}
+      </p>
+      <p className="hint">
+        Dữ liệu địa điểm: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors (ODbL)</a>
+        {" và "}<a href="https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053" target="_blank" rel="noreferrer">Wikivoyage contributors</a>
+        {" ("}<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>{"). "}
+        Dữ liệu đã tuyển chọn/chuyển đổi; giờ, giá còn thiếu cần xác minh trước khi đi.
       </p>
       {it.violations.length > 0 && (
         <ul className="violations">
