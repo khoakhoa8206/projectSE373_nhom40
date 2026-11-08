@@ -102,9 +102,10 @@ def create_run(uc, trip_id, user_id, eval_case_id=None):
 
 
 def finish_run(run_id, status, tokens_in, tokens_out, cost_usd, latency_ms):
+    """Cộng dồn: 1 run có thể chạy nhiều đoạn (dừng chờ người dùng / backend restart rồi chạy tiếp)."""
     query(
-        "UPDATE runs SET status = ?, ended_at = ?, tokens_in = ?, tokens_out = ?, cost_usd = ?, latency_ms = ?"
-        " WHERE run_id = ?",
+        "UPDATE runs SET status = ?, ended_at = ?, tokens_in = tokens_in + ?, tokens_out = tokens_out + ?,"
+        " cost_usd = cost_usd + ?, latency_ms = COALESCE(latency_ms, 0) + ? WHERE run_id = ?",
         (status, now(), tokens_in, tokens_out, cost_usd, latency_ms, run_id),
     )
 
