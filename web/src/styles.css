@@ -91,6 +91,12 @@ legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .trace li.err { color: var(--err); }
 .trace pre { background: #f1f4f5; padding: 8px; border-radius: 6px; overflow-x: auto; max-height: 300px; font-size: 0.78rem; }
 
+.location { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-top: 8px; }
+.location p { margin: 0 0 8px; }
+.location > p:last-child { margin: 0; }
+.location button:not(.link) { padding: 8px 12px; border: 1px solid var(--brand); color: var(--brand); background: #fff; border-radius: 8px; cursor: pointer; }
+.location label { display: grid; gap: 4px; margin-top: 10px; }
+
 .map { height: 55vh; min-height: 320px; border-radius: 12px; border: 1px solid var(--line); }
 .pin span {
   display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
@@ -99,8 +105,10 @@ legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 
 @media (min-width: 960px) {
   .plan { grid-template-columns: minmax(380px, 1fr) 1.2fr; align-items: start; }
-  .mapcol { position: sticky; top: 60px; }
-  .map { height: calc(100vh - 110px); }
+  /* cột bản đồ cao đúng 1 màn hình: bản đồ co lại để chú thích + thẻ vị trí luôn thấy được, không phải cuộn */
+  .mapcol { position: sticky; top: 60px; height: calc(100vh - 76px); display: flex; flex-direction: column; }
+  .map { flex: 1; height: auto; min-height: 280px; }
+  .mapcol > p { margin: 6px 0 0; }
 }
 @media (max-width: 480px) {
   .grid { grid-template-columns: 1fr; }
