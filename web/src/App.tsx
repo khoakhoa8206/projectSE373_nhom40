@@ -1,5 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type ApiError, type Itinerary, type PlanResult, type Slot, type TraceEvent, type TripProfile, type User } from "./api";
+import {
+  api, resume, type ApiError, type Decision, type InterruptPayload, type Itinerary, type PlanResult, type Poi, type Slot, type TripProfile, type User,
+} from "./api";
+import AgentStream from "./components/AgentStream";
+import ApprovalCard from "./components/ApprovalCard";
+import { distanceM, nearestPoi, useSessionLocation, type Coords } from "./location";
 import MapView, { DAY_COLORS } from "./MapView";
 
 const USER_KEY = "tourguide.user";
@@ -53,8 +58,29 @@ export default function App() {
           </span>
         )}
       </header>
+      <OfflineBanner />
       {user ? <PlanScreen user={user} onExpired={() => pick(null)} /> : <UserPicker onPick={pick} />}
     </div>
+  );
+}
+
+/** PWA vẫn mở được khi mất mạng (khung app trong cache) nhưng agent, lịch trình, bản đồ cần mạng: báo ngay, bằng chữ. */
+function OfflineBanner() {
+  const [online, setOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+  return online ? null : (
+    <p className="offline" role="status">
+      Thiết bị đang mất mạng. Agent, lịch trình và bản đồ cần mạng; bật mạng rồi thử lại.
+    </p>
   );
 }
 
@@ -123,7 +149,7 @@ function toProfile(f: Form): TripProfile {
 
 type Phase = { kind: "idle" | "done" } | { kind: "running"; step: string; since: number } | { kind: "error"; message: string };
 
-/** UC-02: form hồ sơ → POST /trips → POST /plan (2–3 phút) → lịch trình theo ngày + bản đồ + log các bước. */
+/** UC-02: form hồ sơ → POST /trips → POST /plan → tiến trình agent (SSE) → lịch trình theo ngày + bản đồ → người duyệt (interrupt). */
 function PlanScreen({ user, onExpired }: { user: User; onExpired: () => void }) {
   const [form, setForm] = useState<Form>({
     start_date: "2026-11-25",
@@ -138,32 +164,73 @@ function PlanScreen({ user, onExpired }: { user: User; onExpired: () => void }) 
   });
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
-  const [trace, setTrace] = useState<{ runId: string; events: TraceEvent[] } | null>(null);
+  const [tripId, setTripId] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [pending, setPending] = useState<InterruptPayload | null>(null); // graph đang dừng chờ người dùng
+  const [sending, setSending] = useState(false);
+  const location = useSessionLocation();
+  const [pois, setPois] = useState<Poi[]>([]);
+  const [picked, setPicked] = useState<Poi | null>(null); // điểm tự chọn khi không có vị trí
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setItinerary(null);
-    setTrace(null);
-    const since = Date.now();
-    let runId: string | undefined;
+  useEffect(() => {
+    api<Poi[]>("/pois").then(setPois, () => {}); // không tải được POI thì bản đồ vẫn dùng được
+  }, []);
+
+  async function loadItinerary(id: string) {
     try {
-      setPhase({ kind: "running", step: "Đang lưu hồ sơ…", since });
-      const { trip_id } = await api<{ trip_id: string }>("/trips", { json: toProfile(form) });
-      setPhase({ kind: "running", step: "Agent đang lập lịch trình: tra giờ mở cửa, thời gian di chuyển, thời tiết…", since });
-      const plan = await api<PlanResult>(`/trips/${trip_id}/plan`, { method: "POST" });
-      runId = plan.run_id;
-      setItinerary(await api<Itinerary>(`/trips/${trip_id}/itinerary`));
+      setItinerary(await api<Itinerary>(`/trips/${id}/itinerary`));
       setPhase({ kind: "done" });
     } catch (err) {
       const e = err as ApiError;
       if (e.status === 401) return onExpired();
-      runId ??= (e.detail as { run_id?: string } | undefined)?.run_id; // /plan lỗi vẫn trả run_id để xem log
       setPhase({ kind: "error", message: e.message });
     }
-    if (runId) {
-      const id = runId;
-      api<TraceEvent[]>(`/runs/${id}/trace`).then((events) => setTrace({ runId: id, events }), () => {});
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setItinerary(null);
+    setRunId(null);
+    setPending(null);
+    const since = Date.now();
+    try {
+      setPhase({ kind: "running", step: "Đang lưu hồ sơ…", since });
+      const { trip_id } = await api<{ trip_id: string }>("/trips", { json: toProfile(form) });
+      setTripId(trip_id);
+      setPhase({ kind: "running", step: "Agent đang lập lịch trình: tra giờ mở cửa, thời gian di chuyển, thời tiết…", since });
+      const plan = await api<PlanResult>(`/trips/${trip_id}/plan`, { method: "POST" });
+      setRunId(plan.run_id); // tiến trình hiện qua AgentStream; xong thì onDone tải lịch trình
+      if (plan.itinerary_id) await loadItinerary(trip_id); // backend chạy đồng bộ thì đã có lịch trình ngay
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.status === 401) return onExpired();
+      const id = (e.detail as { run_id?: string } | undefined)?.run_id; // /plan lỗi vẫn trả run_id để xem tiến trình
+      if (id) setRunId(id);
+      setPhase({ kind: "error", message: e.message });
+    }
+  }
+
+  function onInterrupt(p: InterruptPayload) {
+    setPending(p);
+    setPhase({ kind: "done" });
+    if (p.kind === "itinerary_approval" && tripId) loadItinerary(tripId); // người duyệt cần thấy lịch trình
+  }
+
+  async function decide(decision: Decision, response: unknown) {
+    if (!pending || !tripId) return;
+    setSending(true);
+    try {
+      const res = await resume(tripId, { approval_id: pending.approval_id, decision, response });
+      setPending(null);
+      setRunId(res.run_id);
+      setPhase({ kind: "running", step: "Agent đang chạy tiếp…", since: Date.now() });
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.status === 401) return onExpired();
+      setPhase({ kind: "error", message: e.message });
+    } finally {
+      setSending(false);
     }
   }
 
@@ -242,11 +309,16 @@ function PlanScreen({ user, onExpired }: { user: User; onExpired: () => void }) 
         )}
         {phase.kind === "error" && <p className="error" role="alert">{phase.message}</p>}
         {itinerary && <ItineraryView it={itinerary} />}
-        {trace && <TracePanel {...trace} />}
+        {pending && <ApprovalCard payload={pending} busy={sending} onSubmit={decide} />}
+        {runId && (
+          <AgentStream runId={runId} onInterrupt={onInterrupt} onDone={() => tripId && loadItinerary(tripId)}
+            onError={() => setPhase({ kind: "error", message: "Agent gặp lỗi, xem các bước bên dưới." })} />
+        )}
       </section>
       <section className="mapcol">
-        <MapView slots={itinerary?.slots ?? NO_SLOTS} />
+        <MapView slots={itinerary?.slots ?? NO_SLOTS} pois={pois} here={location.coords ?? picked} />
         <p className="muted small">Đường nét đứt nối các điểm theo thứ tự tham quan, không phải đường đi thực tế.</p>
+        <LocationCard location={location} pois={pois} picked={picked} onPick={setPicked} />
       </section>
     </main>
   );
@@ -278,7 +350,9 @@ function ItineraryView({ it }: { it: Itinerary }) {
         Dữ liệu địa điểm: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors (ODbL)</a>
         {" và "}<a href="https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053" target="_blank" rel="noreferrer">Wikivoyage contributors</a>
         {" ("}<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>{"). "}
-        Dữ liệu đã tuyển chọn/chuyển đổi; giờ, giá còn thiếu cần xác minh trước khi đi.
+        Dữ liệu đã tuyển chọn/chuyển đổi; giờ, giá còn thiếu cần xác minh trước khi đi. Thời tiết: dự báo mock của nhóm; khi bật
+        nguồn thứ hai: <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather data by Open-Meteo.com</a>
+        {" ("}<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>{")."}
       </p>
       {it.violations.length > 0 && (
         <ul className="violations">
@@ -332,29 +406,53 @@ function SlotItem({ s }: { s: Slot }) {
   );
 }
 
-/** Panel log: GET /api/runs/{id}/trace, mỗi bước bấm vào xem tham số và kết quả. */
-function TracePanel({ runId, events }: { runId: string; events: TraceEvent[] }) {
+/** Giải thích mục đích TRƯỚC khi trình duyệt hỏi quyền; từ chối thì cho chọn điểm thủ công, app vẫn dùng bình thường. */
+function LocationCard({ location, pois, picked, onPick }: {
+  location: ReturnType<typeof useSessionLocation>;
+  pois: Poi[];
+  picked: Poi | null;
+  onPick: (p: Poi | null) => void;
+}) {
+  const { coords, request, error, asking, clear } = location;
+  const attractions = pois.filter((p) => p.category === "attraction").sort((a, b) => a.name_vi.localeCompare(b.name_vi, "vi"));
+  if (coords) return <Nearest coords={coords} poi={nearestPoi(coords, attractions)} onHide={clear} />;
   return (
-    <details className="trace" open>
-      <summary>
-        Log các bước của agent · {events.length} bước · <code>{runId}</code>
-      </summary>
-      <ol>
-        {events.map((e) => (
-          <li key={e.seq} className={e.error ? "err" : undefined}>
-            <details>
-              <summary>
-                <b>{e.node}</b> · {e.kind}
-                {e.name && ` · ${e.name}`}
-                {e.duration_ms != null && ` · ${e.duration_ms} ms`}
-                {e.tokens != null && ` · ${e.tokens} token`}
-                {e.error && ` · lỗi: ${e.error}`}
-              </summary>
-              <pre>{JSON.stringify({ args: e.args, result: e.result }, null, 2)}</pre>
-            </details>
-          </li>
-        ))}
-      </ol>
-    </details>
+    <div className="location" aria-live="polite">
+      <p className="small">
+        <b>Vị trí của bạn</b> dùng để tìm điểm tham quan gần bạn, chỉ dùng trong phiên này: không lưu lại, không gửi lên máy chủ,
+        đóng hoặc tải lại trang là mất.
+      </p>
+      {error && <p className="warn small" role="alert">{error}</p>}
+      <button onClick={request} disabled={asking}>
+        {asking ? "Đang lấy vị trí…" : "Tìm điểm gần tôi"}
+      </button>
+      {error && (
+        <label className="small">
+          Hoặc chọn điểm bạn đang ở
+          <select value={picked?.poi_id ?? ""} onChange={(e) => onPick(attractions.find((p) => p.poi_id === e.target.value) ?? null)}>
+            <option value="">-- chọn điểm --</option>
+            {attractions.map((p) => (
+              <option key={p.poi_id} value={p.poi_id}>{p.name_vi}</option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
+function Nearest({ coords, poi, onHide }: { coords: Coords; poi: Poi | null; onHide: () => void }) {
+  return (
+    <div className="location" aria-live="polite">
+      <p>
+        Đang hiện vị trí của bạn (sai số khoảng {coords.accuracy_m} m).{" "}
+        <button className="link" onClick={onHide}>Ẩn vị trí</button>
+      </p>
+      {poi && (
+        <p className="small">
+          Điểm tham quan gần bạn nhất: <b>{poi.name_vi}</b>, khoảng {(distanceM(coords, poi) / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} km đường chim bay.
+        </p>
+      )}
+    </div>
   );
 }
