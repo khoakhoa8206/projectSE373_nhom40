@@ -278,7 +278,9 @@ function ItineraryView({ it }: { it: Itinerary }) {
         Dữ liệu địa điểm: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors (ODbL)</a>
         {" và "}<a href="https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053" target="_blank" rel="noreferrer">Wikivoyage contributors</a>
         {" ("}<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>{"). "}
-        Dữ liệu đã tuyển chọn/chuyển đổi; giờ, giá còn thiếu cần xác minh trước khi đi.
+        Dữ liệu đã tuyển chọn/chuyển đổi; giờ, giá còn thiếu cần xác minh trước khi đi. Thời tiết: dự báo mock của nhóm; khi bật
+        nguồn thứ hai: <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather data by Open-Meteo.com</a>
+        {" ("}<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>{")."}
       </p>
       {it.violations.length > 0 && (
         <ul className="violations">
