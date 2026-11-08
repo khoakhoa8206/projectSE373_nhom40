@@ -97,3 +97,31 @@ export async function api<T>(path: string, init?: { method?: "POST"; json?: unkn
   if (!res.ok) throw new ApiError(res.status, describe(res.status, data?.detail), data?.detail);
   return data as T;
 }
+
+// ---- Hợp đồng chung với P1: interrupt (thread_id = trip_id), resume, SSE tiến trình ----
+
+export type MemoryItem = { key: string; value: string; sensitivity: "normal" | "sensitive" };
+
+/** payload của interrupt(): graph dừng chờ người dùng. */
+export type InterruptPayload =
+  | { kind: "ask_user"; approval_id: string; data: { questions: { field: string; text: string }[]; conflicts?: unknown[] } }
+  | { kind: "itinerary_approval"; approval_id: string; data: { itinerary_id: string } }
+  | { kind: "memory_save"; approval_id: string; data: { items: MemoryItem[] } };
+
+export type Decision = "approved" | "rejected" | "edited";
+
+/** 1 sự kiện của GET /api/runs/{run_id}/stream; `kind` = tên `event:` của SSE. Toạ độ đã che còn 2 số thập phân. */
+export type StreamEvent = {
+  kind: "node_start" | "node_end" | "tool_call" | "interrupt" | "done" | "error";
+  run_id: string;
+  node: string;
+  ts: string;
+  tool?: string;
+  duration_ms?: number;
+  payload?: unknown;
+};
+
+/** POST /api/trips/{trip_id}/resume: graph chạy tiếp từ điểm dừng, trả run_id mới để mở stream. */
+export function resume(tripId: string, body: { approval_id: string; decision: Decision; response: unknown }) {
+  return api<{ run_id: string }>(`/trips/${tripId}/resume`, { json: body });
+}

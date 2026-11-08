@@ -1,0 +1,14 @@
+/* AgentStream + ApprovalCard (W8-P4-1); biến màu lấy từ styles.css */
+.approval { background: var(--card); border: 2px solid var(--brand); border-radius: 12px; padding: 14px; }
+.approval-body { margin: 8px 0 12px; }
+.approval-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.approval-actions button { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+.approval-actions button.primary { border-color: var(--brand); }
+.approval-actions button.danger { background: var(--err); border-color: var(--err); color: #fff; font-weight: 600; }
+.approval textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-top: 4px; font: inherit; }
+.small-spinner { display: inline-block; width: 14px; height: 14px; border-width: 2px; vertical-align: -2px; margin-right: 6px; }
+.approval label { display: grid; gap: 4px; margin: 8px 0; }
+.approval input:not([type="checkbox"]) { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.approval .memory { list-style: none; padding: 0; margin: 8px 0; }
+.approval .memory label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.timeline time { color: var(--muted); font-variant-numeric: tabular-nums; }
