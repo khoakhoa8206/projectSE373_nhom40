@@ -1,0 +1,85 @@
+{
+ "note": "Bản tạm của P4 cho W9-P4-1, dựng từ dữ liệu Huế thật (poi.csv, travel_matrix.csv, mock_data.json). P2 thay bằng lịch trình mẫu của P2 khi có; giữ định dạng {profile, itinerary, expected}.",
+ "description": "Cài lỗi: giá 1 người cho đoàn 2 người, ở bảo tàng quá giờ đóng cửa 16:45, đi xe 20 phút (cache 4), mưa 30 mm (mock 0 mm).",
+ "profile": {
+  "start_date": "2026-11-25",
+  "end_date": "2026-11-25",
+  "adults": 2,
+  "budget_total_vnd": 8000000,
+  "pace": "moderate",
+  "language": "vi"
+ },
+ "itinerary": {
+  "itinerary_id": "fx-02",
+  "slots": [
+   {
+    "slot_id": "fx-02:d1-s1",
+    "day_index": 1,
+    "slot_date": "2026-11-25",
+    "start_time": "08:00",
+    "end_time": "10:30",
+    "poi_id": "hue-dai-noi",
+    "activity": "Tham quan Đại Nội",
+    "travel_minutes_from_prev": null,
+    "cost_vnd": 200000,
+    "cost_source": "tool",
+    "hours_status": "unverified",
+    "note": null
+   },
+   {
+    "slot_id": "fx-02:d1-s2",
+    "day_index": 1,
+    "slot_date": "2026-11-25",
+    "start_time": "13:30",
+    "end_time": "15:00",
+    "poi_id": "hue-bao-tang-co-vat",
+    "activity": "Bảo tàng Cổ vật Cung đình",
+    "travel_minutes_from_prev": 4,
+    "cost_vnd": null,
+    "cost_source": "unverified",
+    "hours_status": "verified",
+    "note": "Chiều 25/11 mưa khoảng 30 mm, nên mang áo mưa."
+   },
+   {
+    "slot_id": "fx-02:d1-s3",
+    "day_index": 1,
+    "slot_date": "2026-11-25",
+    "start_time": "16:00",
+    "end_time": "17:30",
+    "poi_id": "hue-bao-tang-ho-chi-minh",
+    "activity": "Bảo tàng Hồ Chí Minh",
+    "travel_minutes_from_prev": 20,
+    "cost_vnd": null,
+    "cost_source": "unverified",
+    "hours_status": "verified",
+    "note": null
+   }
+  ]
+ },
+ "expected": [
+  {
+   "slot_id": "fx-02:d1-s1",
+   "claim_type": "price",
+   "claim_text": "cost_vnd=200000",
+   "status": "contradicted"
+  },
+  {
+   "slot_id": "fx-02:d1-s2",
+   "claim_type": "weather",
+   "claim_text": "30 mm",
+   "status": "contradicted"
+  },
+  {
+   "slot_id": "fx-02:d1-s3",
+   "claim_type": "opening_hours",
+   "claim_text": "16:00–17:30",
+   "status": "contradicted"
+  },
+  {
+   "slot_id": "fx-02:d1-s3",
+   "claim_type": "distance",
+   "claim_text": "travel_minutes_from_prev=20",
+   "status": "contradicted"
+  }
+ ]
+}
