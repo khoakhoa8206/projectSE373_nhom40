@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type ApiError, type Itinerary, type PlanResult, type Slot, type TraceEvent, type TripProfile, type User } from "./api";
+import { api, type ApiError, type Itinerary, type PlanResult, type Poi, type Slot, type TraceEvent, type TripProfile, type User } from "./api";
+import { distanceM, nearestPoi, useSessionLocation, type Coords } from "./location";
 import MapView, { DAY_COLORS } from "./MapView";
 
 const USER_KEY = "tourguide.user";
@@ -139,7 +140,14 @@ function PlanScreen({ user, onExpired }: { user: User; onExpired: () => void }) 
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [trace, setTrace] = useState<{ runId: string; events: TraceEvent[] } | null>(null);
+  const location = useSessionLocation();
+  const [pois, setPois] = useState<Poi[]>([]);
+  const [picked, setPicked] = useState<Poi | null>(null); // điểm tự chọn khi không có vị trí
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    api<Poi[]>("/pois").then(setPois, () => {}); // không tải được POI thì bản đồ vẫn dùng được
+  }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -245,8 +253,9 @@ function PlanScreen({ user, onExpired }: { user: User; onExpired: () => void }) 
         {trace && <TracePanel {...trace} />}
       </section>
       <section className="mapcol">
-        <MapView slots={itinerary?.slots ?? NO_SLOTS} />
+        <MapView slots={itinerary?.slots ?? NO_SLOTS} pois={pois} here={location.coords ?? picked} />
         <p className="muted small">Đường nét đứt nối các điểm theo thứ tự tham quan, không phải đường đi thực tế.</p>
+        <LocationCard location={location} pois={pois} picked={picked} onPick={setPicked} />
       </section>
     </main>
   );
@@ -331,6 +340,57 @@ function SlotItem({ s }: { s: Slot }) {
         {s.note && <div className="muted small">{s.note}</div>}
       </div>
     </li>
+  );
+}
+
+/** Giải thích mục đích TRƯỚC khi trình duyệt hỏi quyền; từ chối thì cho chọn điểm thủ công, app vẫn dùng bình thường. */
+function LocationCard({ location, pois, picked, onPick }: {
+  location: ReturnType<typeof useSessionLocation>;
+  pois: Poi[];
+  picked: Poi | null;
+  onPick: (p: Poi | null) => void;
+}) {
+  const { coords, request, error, asking, clear } = location;
+  const attractions = pois.filter((p) => p.category === "attraction").sort((a, b) => a.name_vi.localeCompare(b.name_vi, "vi"));
+  if (coords) return <Nearest coords={coords} poi={nearestPoi(coords, attractions)} onHide={clear} />;
+  return (
+    <div className="location" aria-live="polite">
+      <p className="small">
+        <b>Vị trí của bạn</b> dùng để tìm điểm tham quan gần bạn, chỉ dùng trong phiên này: không lưu lại, không gửi lên máy chủ,
+        đóng hoặc tải lại trang là mất.
+      </p>
+      {error && <p className="warn small" role="alert">{error}</p>}
+      <button onClick={request} disabled={asking}>
+        {asking ? "Đang lấy vị trí…" : "Tìm điểm gần tôi"}
+      </button>
+      {error && (
+        <label className="small">
+          Hoặc chọn điểm bạn đang ở
+          <select value={picked?.poi_id ?? ""} onChange={(e) => onPick(attractions.find((p) => p.poi_id === e.target.value) ?? null)}>
+            <option value="">-- chọn điểm --</option>
+            {attractions.map((p) => (
+              <option key={p.poi_id} value={p.poi_id}>{p.name_vi}</option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
+function Nearest({ coords, poi, onHide }: { coords: Coords; poi: Poi | null; onHide: () => void }) {
+  return (
+    <div className="location" aria-live="polite">
+      <p>
+        Đang hiện vị trí của bạn (sai số khoảng {coords.accuracy_m} m).{" "}
+        <button className="link" onClick={onHide}>Ẩn vị trí</button>
+      </p>
+      {poi && (
+        <p className="small">
+          Điểm tham quan gần bạn nhất: <b>{poi.name_vi}</b>, khoảng {(distanceM(coords, poi) / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} km đường chim bay.
+        </p>
+      )}
+    </div>
   );
 }
 
