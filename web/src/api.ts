@@ -56,7 +56,7 @@ export type SavedMemory = {
 
 export type MemoryList = { items: SavedMemory[]; sensitive_consent: boolean };
 
-export type PlanResult ={ run_id: string; itinerary_id: string | null; status: string; error: string | null };
+export type PlanResult = { run_id: string; itinerary_id: string | null; status: string; error: string | null };
 
 export type TraceEvent = {
   seq: number;
