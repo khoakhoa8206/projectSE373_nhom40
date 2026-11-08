@@ -1,5 +1,6 @@
 """W9-P3-3: UC-09 nhật ký chuyến đi + nén context theo tầng, chạy với LLM giả (không cần API key)."""
 
+import copy
 import json
 import re
 from pathlib import Path
@@ -28,17 +29,18 @@ def fixture(name):
 
 
 class FakeLLM:
-    """LLM giả: usage.prompt_tokens tỉ lệ độ dài prompt; nhật ký ngày trích event_id đầu tiên trong prompt.
-    `day_texts`: các summary trả lần lượt cho lời gọi tầng ngày (mặc định không có số tiền)."""
+    """LLM giả: usage.prompt_tokens tỉ lệ độ dài prompt + schema tool (như provider thật); nhật ký ngày trích event_id
+    đầu tiên trong prompt. `day_texts`: các summary trả lần lượt cho lời gọi tầng ngày (mặc định không có số tiền)."""
 
     def __init__(self, day_texts=(), bogus_id=False):
-        self.calls, self.day_texts, self.bogus_id = [], list(day_texts), bogus_id
+        self.calls, self.requests, self.day_texts, self.bogus_id = [], [], list(day_texts), bogus_id
         self.chat = NS(completions=NS(create=self.create))
 
     def create(self, **kw):
         system, user = kw["messages"][0]["content"], kw["messages"][1]["content"]
-        kind = "measure" if "tools" not in kw else "day" if "MỘT ngày" in system else "trip"
+        kind = "measure" if kw.get("max_tokens") == 16 else "day" if "MỘT ngày" in system else "trip"
         self.calls.append((kind, user))
+        self.requests.append((kind, copy.deepcopy(kw)))
         message = {"role": "assistant", "content": "ok"}
         if kind == "day":
             ids = re.findall(r"\[([^\]]+)\] \d\d:\d\d", user)
@@ -52,7 +54,8 @@ class FakeLLM:
         if kind != "measure":
             message |= {"content": None, "tool_calls": [{"id": "c1", "type": "function", "function": {
                 "name": SUBMIT, "arguments": json.dumps(draft, ensure_ascii=False)}}]}  # fmt: skip
-        prompt_tokens = sum(len(m["content"] or "") for m in kw["messages"]) // 4
+        chars = sum(len(m["content"] or "") for m in kw["messages"]) + len(json.dumps(kw.get("tools", [])))
+        prompt_tokens = chars // 4
         return ChatCompletion.model_validate({
             "id": "x", "object": "chat.completion", "created": 0, "model": "fake",
             "choices": [{"index": 0, "message": message,
@@ -191,6 +194,9 @@ def test_trip_summary_is_hierarchical_and_measures_compression(trip):
     summary = next(p for k, p in llm.calls if k == "trip")
     assert "<su_kien" in measure and "ghi tổng chi là 100.000 đồng" in measure  # lần đo: sự kiện thô
     assert "<tom_tat_ngay>" in summary and "<su_kien" not in summary  # tầng 2 không đưa lại sự kiện thô
+    measure_kw, trip_kw = (next(kw for k, kw in llm.requests if k == kind) for kind in ("measure", "trip"))
+    # lần đo gửi y hệt request thật (system prompt + schema tool): 2 số token chỉ khác ở phần dữ liệu
+    assert measure_kw["messages"][0] == trip_kw["messages"][0] and measure_kw["tools"] == trip_kw["tools"]
     assert "ghi tổng chi là 100.000 đồng" not in summary
     assert repo.query("SELECT scope, COUNT(*) AS n FROM journals GROUP BY scope ORDER BY scope") == [
         {"scope": "day", "n": 6}, {"scope": "trip", "n": 1}]

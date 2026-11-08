@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from agent.db import repo
 from agent.src.graph.app import traced
 from agent.src.graph.llm_requests import request_completion
-from agent.src.graph.loop import agent_loop, load_skill, make_client, model_names, ms, run_tool
+from agent.src.graph.loop import SUBMIT, agent_loop, json_schema, load_skill, make_client, model_names, ms, run_tool
 from agent.src.tools.expenses import sum_expenses
 
 MONEY = re.compile(r"\d[\d.,]*\s*(?:đồng|đ\b|vnđ|vnd|₫|dong\b|k\b|nghìn|ngàn|triệu|thousand|million)", re.IGNORECASE)
@@ -29,6 +29,7 @@ Không nêu bất kỳ số tiền nào (kể cả 0 đồng) và không tự c�
 sum_expenses và hiển thị riêng. Không ghi toạ độ; vị trí chỉ là tên địa điểm."""
 DAY_SYSTEM = "Bạn viết nhật ký MỘT ngày du lịch ở Huế từ danh sách sự kiện trong <su_kien>.\n" + RULES
 TRIP_SYSTEM = "Bạn viết tóm tắt CẢ chuyến du lịch ở Huế từ các tóm tắt ngày trong dữ liệu.\n" + RULES
+GENERATE_TURNS = 3  # số lượt agent_loop của generate()
 
 
 class Highlight(BaseModel):
@@ -119,12 +120,12 @@ def generate(get_client, usage, run_id, node, system, prompt, output):
     Trả (bản nháp, prompt_tokens của request đầu tiên = token prompt khi đưa dữ liệu này)."""
     client = get_client()
     start = len(client.prompt_tokens)
-    draft = agent_loop(client, system, prompt, [], output, run_id, node, usage, max_turns=3)
+    draft = agent_loop(client, system, prompt, [], output, run_id, node, usage, max_turns=GENERATE_TURNS)
     first = client.prompt_tokens[start] if len(client.prompt_tokens) > start else None
     if any(MONEY.search(t) for t in _texts(draft)):
         repo.log_event(run_id, node, "guardrail", name="money_in_text", result={"texts": _texts(draft)})
         retry = prompt + "\n\nBản trước có nêu số tiền. Viết lại, KHÔNG nêu số tiền nào."
-        draft = agent_loop(get_client(), system, retry, [], output, run_id, node, usage, max_turns=3)
+        draft = agent_loop(get_client(), system, retry, [], output, run_id, node, usage, max_turns=GENERATE_TURNS)
         draft.summary = strip_money(draft.summary)
         draft.highlights = [h for h in draft.highlights if not MONEY.search(h.text)]
     return draft, first
@@ -192,13 +193,29 @@ def day_summaries_block(days) -> str:
     return "\n".join([*lines, "</tom_tat_ngay>"])
 
 
-def measure_prompt_tokens(client, system, user, run_id, usage):
-    """1 lần gọi chỉ để lấy usage.prompt_tokens khi đưa TOÀN BỘ sự kiện thô (tokens_before); nội dung trả lời bỏ đi."""
+def loop_first_request(system, output, max_turns=GENERATE_TURNS):
+    """System prompt + tools GIỐNG HỆT request đầu tiên của agent_loop (agent/src/graph/loop.py): schema tool
+    submit_result cũng tính vào prompt_tokens, nên lần đo phải gửi y hệt thì 2 số mới chỉ khác ở phần dữ liệu.
+    test_journal kiểm 2 request trùng nhau; loop.py đổi cách dựng request thì sửa hàm này theo."""
+    instruction = f"{system}\n\nKhi xong, gọi tool {SUBMIT} với kết quả cuối, không trả lời bằng văn bản."
+    content = (f"{instruction}\nNgân sách vòng này: còn {max_turns}/{max_turns} lượt LLM. "
+               "Gom tra cứu độc lập vào cùng lượt tool calls, không hỏi lại facts đã có/unknown. "
+               f"Đủ dữ kiện thì nộp {SUBMIT}, không cần dùng hết lượt.")
+    tools = [{"type": "function", "function": {
+        "name": SUBMIT, "description": "Nộp kết quả cuối cùng khi đã đủ dữ liệu.", "parameters": json_schema(output),
+    }}]  # fmt: skip
+    return content, tools
+
+
+def measure_prompt_tokens(client, system, user, output, run_id, usage):
+    """1 lần gọi chỉ để lấy usage.prompt_tokens khi đưa TOÀN BỘ sự kiện thô (tokens_before); nội dung trả lời bỏ đi.
+    Cùng system prompt + schema tool với request thật của tầng 2 (loop_first_request), chỉ khác phần dữ liệu."""
     names = model_names()
     options = {"extra_body": {"models": names}} if "openrouter.ai" in str(getattr(client, "base_url", "")) else {}
+    content, tools = loop_first_request(system, output)
     t0 = time.perf_counter()
-    resp = request_completion(client, run_id, "summarize_trip", model=names[0], max_tokens=16,
-                              messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+    resp = request_completion(client, run_id, "summarize_trip", model=names[0], max_tokens=16, tools=tools,
+                              messages=[{"role": "system", "content": content}, {"role": "user", "content": user}],
                               **options)  # fmt: skip
     prompt_tokens = client.prompt_tokens[-1]
     usage["in"] += prompt_tokens or 0
@@ -219,8 +236,8 @@ def summarize_trip(state, get_client, usage):
     if days:
         system = TRIP_SYSTEM + "\n\n" + load_skill("trip-journal", run_id, "summarize_trip")
         head = f"Tóm tắt cả chuyến ({len(days)} ngày có dữ liệu) · viết bằng {LANG[lang]}.\n"
-        tokens_before = measure_prompt_tokens(get_client(), system, head + events_block(state["events"], lang), run_id,
-                                              usage)  # fmt: skip
+        raw_prompt = head + events_block(state["events"], lang)
+        tokens_before = measure_prompt_tokens(get_client(), system, raw_prompt, TripDraft, run_id, usage)
         draft, tokens_after = generate(get_client, usage, run_id, "summarize_trip", system,
                                        head + day_summaries_block(days), TripDraft)  # fmt: skip
         known = {d["day_index"] for d in days}
