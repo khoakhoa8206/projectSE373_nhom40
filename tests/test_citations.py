@@ -79,3 +79,9 @@ def test_save_citations_writes_is_valid(kb):
                       (message_id,))  # fmt: skip
     assert rows == [{"chunk_id": "hue-a-vi-01:c0", "quote": "khởi công tháng 5/1899", "is_valid": 1},
                     {"chunk_id": "hue-a-vi-01:c0", "quote": "bịa", "is_valid": 0}]
+
+
+def test_curly_and_straight_quotes_match(kb):
+    repo.save_kb([DOC], [CHUNKS[0] | {"text": "Theo Kinh Dịch, hướng Nam là hướng “nghe thiên hạ”."}])
+    [checked] = cv.validate_citations([cit('hướng Nam là hướng "nghe thiên hạ"')])
+    assert checked["is_valid"] is True

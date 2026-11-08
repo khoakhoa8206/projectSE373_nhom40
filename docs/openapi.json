@@ -263,6 +263,43 @@
           }
         }
       }
+    },
+    "/api/narrate": {
+      "post": {
+        "summary": "Narrate",
+        "description": "UC-03 (P3): thuyết minh có trích dẫn [doc_id §section] theo ngôn ngữ người dùng. Kho không có thông tin →\nout_of_kb = true và câu mẫu. Lỗi → 500 kèm run_id để xem trace.",
+        "operationId": "narrate_api_narrate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NarrateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -294,6 +331,57 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "NarrateIn": {
+        "properties": {
+          "poi_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poi Id"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "vi",
+              "en"
+            ],
+            "title": "Lang"
+          },
+          "length": {
+            "type": "string",
+            "enum": [
+              "short",
+              "detail"
+            ],
+            "title": "Length",
+            "default": "short"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lang"
+        ],
+        "title": "NarrateIn",
+        "description": "Body UC-03: poi_id (UI tự tìm POI gần nhất, không bao giờ gửi toạ độ) và/hoặc câu hỏi."
       },
       "SessionIn": {
         "properties": {

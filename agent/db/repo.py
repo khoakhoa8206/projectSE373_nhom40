@@ -290,6 +290,12 @@ def save_kb(docs: list[dict], chunks: list[dict]) -> dict:
     return {"documents": len(docs), "chunks": len(chunks)}
 
 
+def latest_trip_id(user_id):
+    """trip_id mới nhất của người dùng (UC-03 gắn messages vào chuyến đi gần nhất), None nếu chưa có."""
+    rows = query("SELECT trip_id FROM trips WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1", (user_id,))
+    return rows[0]["trip_id"] if rows else None
+
+
 def kb_chunks_for_docs(doc_ids) -> list[dict]:
     """Mọi chunk (kể cả chunk cũ giữ cho lịch sử) của các tài liệu có trong kb_documents, cho validator trích dẫn."""
     return query(
