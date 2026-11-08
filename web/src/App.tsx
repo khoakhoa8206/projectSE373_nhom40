@@ -54,8 +54,29 @@ export default function App() {
           </span>
         )}
       </header>
+      <OfflineBanner />
       {user ? <PlanScreen user={user} onExpired={() => pick(null)} /> : <UserPicker onPick={pick} />}
     </div>
+  );
+}
+
+/** PWA vẫn mở được khi mất mạng (khung app trong cache) nhưng agent, lịch trình, bản đồ cần mạng: báo ngay, bằng chữ. */
+function OfflineBanner() {
+  const [online, setOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+  return online ? null : (
+    <p className="offline" role="status">
+      Thiết bị đang mất mạng. Agent, lịch trình và bản đồ cần mạng; bật mạng rồi thử lại.
+    </p>
   );
 }
 
