@@ -50,3 +50,27 @@ def test_delete_is_soft_and_update_validates(db):
     assert store.memory_update("u-ha", mid, "không ăn quá cay")
     assert store.memory_delete("u-ha", mid) and store.memory_read("u-ha") == []
     assert repo.query("SELECT deleted_at IS NOT NULL AS gone FROM memory_items WHERE memory_id = ?", (mid,)) == [{"gone": 1}]
+
+
+def test_memory_api_is_scoped_to_session_user(db):
+    from fastapi.testclient import TestClient
+
+    from agent.src.api import server
+
+    mid = store.memory_write("u-ha", "interest", "lịch sử")
+    store.grant_sensitive_consent("u-ha")
+    store.memory_write("u-ha", "allergy", "dị ứng tôm", "sensitive")
+    ha, minh = TestClient(server.app), TestClient(server.app)
+    ha.post("/api/session", json={"user_id": "u-ha"})
+    minh.post("/api/session", json={"user_id": "u-minh"})
+    assert TestClient(server.app).get("/api/memory").status_code == 401
+    assert minh.get("/api/memory").json() == {"items": [], "sensitive_consent": False}
+    assert minh.patch(f"/api/memory/{mid}", json={"value": "x"}).status_code == 404
+    assert minh.delete(f"/api/memory/{mid}").status_code == 404
+
+    assert ha.patch(f"/api/memory/{mid}", json={"value": "16.46981, 107.57863"}).status_code == 422
+    got = ha.patch(f"/api/memory/{mid}", json={"value": "lịch sử triều Nguyễn"}).json()
+    assert {m["value"] for m in got["items"]} == {"lịch sử triều Nguyễn", "dị ứng tôm"} and got["sensitive_consent"]
+    got = ha.post("/api/memory/consent/revoke").json()
+    assert [m["kind"] for m in got["items"]] == ["interest"] and not got["sensitive_consent"]
+    assert ha.delete(f"/api/memory/{mid}").json()["items"] == []

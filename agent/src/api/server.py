@@ -18,6 +18,7 @@ from agent.db.init import FICTIONAL_USERS
 from agent.schemas import TripProfile
 from agent.src.api.stream import run_events
 from agent.src.graph import app as graph
+from agent.src.memory import store
 
 load_dotenv()
 USERS = {user_id: (name, lang) for user_id, name, lang in FICTIONAL_USERS}
@@ -161,6 +162,41 @@ def get_itinerary(trip_id: str, user_id: str = Depends(current_user)):
     if itinerary is None:
         raise HTTPException(404, "Chuyến đi chưa có lịch trình")
     return itinerary
+
+
+@app.get("/api/memory")
+def list_memory(user_id: str = Depends(current_user)):
+    """UC-07: bộ nhớ của người dùng trong session (không bao giờ nhận user_id từ request)."""
+    return {"items": store.memory_read(user_id), "sensitive_consent": store.active_consent(user_id) is not None}
+
+
+class MemoryIn(BaseModel):
+    value: str
+
+
+@app.post("/api/memory/consent/revoke")
+def revoke_consent(user_id: str = Depends(current_user)):
+    """Thu hồi đồng ý lưu mục nhạy cảm → xoá mọi mục sensitive."""
+    store.revoke_sensitive_consent(user_id)
+    return list_memory(user_id)
+
+
+@app.patch("/api/memory/{memory_id}")
+def edit_memory(memory_id: str, body: MemoryIn, user_id: str = Depends(current_user)):
+    try:
+        found = store.memory_update(user_id, memory_id, body.value)
+    except store.MemoryRuleError as e:
+        raise HTTPException(422, str(e)) from None
+    if not found:
+        raise HTTPException(404, "Không tìm thấy mục bộ nhớ")
+    return list_memory(user_id)
+
+
+@app.delete("/api/memory/{memory_id}")
+def delete_memory(memory_id: str, user_id: str = Depends(current_user)):
+    if not store.memory_delete(user_id, memory_id):
+        raise HTTPException(404, "Không tìm thấy mục bộ nhớ")
+    return list_memory(user_id)
 
 
 @app.get("/api/runs/{run_id}/stream")
