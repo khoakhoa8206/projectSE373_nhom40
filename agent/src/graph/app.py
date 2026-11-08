@@ -1,5 +1,6 @@
 """Graph UC-02: load_profile → plan → validate → (còn vi phạm và < 4 vòng thì quay lại plan) → finalize
-→ approve (người dùng duyệt / sửa / từ chối, chỉ khi approval=True) → END, hoặc quay lại plan nếu người dùng sửa.
+→ approve (người dùng duyệt / sửa / từ chối, chỉ khi approval=True) → END, hoặc quay lại plan nếu người dùng sửa;
+duyệt xong → remember (UC-07: đề xuất lưu sở thích, người dùng chọn mục nào được lưu) → END.
 Chạy có checkpointer SQLite (thread_id = trip_id): backend chết giữa chừng thì continue_run chạy tiếp đúng node;
 graph đang chờ người dùng thì resume chạy tiếp sau khi người dùng trả lời, kể cả khi backend đã restart."""
 
@@ -15,6 +16,7 @@ from agent.db import repo
 from agent.schemas import Itinerary, TripProfile, Violation
 from agent.src.graph.checkpoint import config, open_checkpointer
 from agent.src.graph.loop import AgentLoopLimitError, make_client, ms
+from agent.src.nodes import memory
 from agent.src.nodes.plan import plan
 from agent.src.validation.validator import check_fabrication, validate
 
@@ -42,6 +44,8 @@ class State(TypedDict, total=False):
     approval: bool  # có dừng chờ người dùng duyệt lịch trình không (API: có; eval/test cũ: không)
     decision: str  # quyết định gần nhất của người dùng ở bước duyệt
     user_feedback: str | None  # ghi chú khi người dùng chọn "sửa", plan dùng làm yêu cầu cho lượt mới
+    user_id: str
+    memory: list[dict]  # UC-07: sở thích người dùng đã đồng ý lưu từ chuyến trước, plan dùng để ưu tiên
 
 
 def default_tools():
@@ -73,7 +77,9 @@ def load_profile(state):
     profile_id, profile = repo.latest_profile(state["trip_id"])
     if profile is None or profile.route != "plan":
         raise ValueError("chuyến đi chưa có hồ sơ với route = plan")
-    return {"profile_id": profile_id, "profile": profile, "round": 0, "violations": [], "history": []}
+    user_id = repo.query("SELECT user_id FROM trips WHERE trip_id = ?", (state["trip_id"],))[0]["user_id"]
+    return {"profile_id": profile_id, "profile": profile, "round": 0, "violations": [], "history": [],
+            "user_id": user_id, "memory": memory.memory_context(user_id, state["run_id"])}  # fmt: skip
 
 
 def check(state):
@@ -168,6 +174,19 @@ def approve(state):
     return {"decision": decision}
 
 
+def remember(state):
+    """UC-07: sau khi lịch trình được duyệt, đề xuất lưu sở thích; chỉ lưu mục người dùng chọn."""
+    items = memory.candidates(state["profile"], state["user_id"], state["trip_id"])
+    if not items:
+        return {}
+    answer = ask_human("memory_save", {"items": items})
+    result = {"saved": [], "skipped": []}
+    if answer["decision"] != "rejected":
+        result = memory.save_selected(state["user_id"], state["trip_id"], items, answer.get("response"))
+    repo.log_event(state["run_id"], "remember", "guardrail", name="memory_write", result=result)
+    return {}
+
+
 def build_uc02(client, tools, usage):
     g = StateGraph(State)
     g.add_node("load_profile", traced("load_profile", load_profile))
@@ -175,12 +194,14 @@ def build_uc02(client, tools, usage):
     g.add_node("validate", traced("validate", check))
     g.add_node("finalize", traced("finalize", finalize))
     g.add_node("approve", traced("approve", approve))
+    g.add_node("remember", traced("remember", remember))
     g.add_edge(START, "load_profile")
     g.add_edge("load_profile", "plan")
     g.add_conditional_edges("plan", lambda s: "finalize" if s.get("planning_stopped") else "validate")
     g.add_conditional_edges("validate", lambda s: "plan" if s["violations"] and s["round"] < MAX_ROUNDS else "finalize")
     g.add_conditional_edges("finalize", lambda s: "approve" if s.get("approval") else END)
-    g.add_conditional_edges("approve", lambda s: "plan" if s["decision"] == "edited" else END)
+    g.add_conditional_edges("approve", lambda s: {"edited": "plan", "approved": "remember"}.get(s["decision"], END))
+    g.add_edge("remember", END)
     return g
 
 
