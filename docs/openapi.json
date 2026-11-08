@@ -98,7 +98,7 @@
     "/api/trips/{trip_id}/plan": {
       "post": {
         "summary": "Plan Trip",
-        "description": "Chạy graph UC-02 (đồng bộ, có thể mất 1–2 phút) tới bước người dùng duyệt: kết quả có `interrupt`\n(kind = itinerary_approval) để gửi lại qua /resume. Lỗi → 500 kèm run_id để xem trace.",
+        "description": "Chạy graph UC-02 tới bước người dùng duyệt: kết quả có `interrupt` (kind = itinerary_approval) để gửi lại\nqua /resume. Mặc định đồng bộ (1–2 phút); `?background=true` trả ngay {run_id} để PWA mở\nGET /api/runs/{run_id}/stream. Lỗi → 500 kèm run_id để xem trace.",
         "operationId": "plan_trip_api_trips__trip_id__plan_post",
         "parameters": [
           {
@@ -108,6 +108,16 @@
             "schema": {
               "type": "string",
               "title": "Trip Id"
+            }
+          },
+          {
+            "name": "background",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Background"
             }
           }
         ],
@@ -174,7 +184,7 @@
     "/api/trips/{trip_id}/resume": {
       "post": {
         "summary": "Resume Trip",
-        "description": "Trả lời 1 interrupt → graph chạy tiếp đúng chỗ dừng (đọc checkpoint, backend restart vẫn được).",
+        "description": "Trả lời 1 interrupt → graph chạy tiếp đúng chỗ dừng (đọc checkpoint, backend restart vẫn được).\n`?background=true`: trả ngay {run_id}, theo dõi bằng stream.",
         "operationId": "resume_trip_api_trips__trip_id__resume_post",
         "parameters": [
           {
@@ -184,6 +194,16 @@
             "schema": {
               "type": "string",
               "title": "Trip Id"
+            }
+          },
+          {
+            "name": "background",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Background"
             }
           }
         ],
@@ -280,6 +300,54 @@
             "schema": {
               "type": "string",
               "title": "Trip Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}/stream": {
+      "get": {
+        "summary": "Stream Run",
+        "description": "SSE các bước của 1 lượt chạy (event = kind trong trace, rồi interrupt / done). Xem agent/src/api/stream.py.",
+        "operationId": "stream_run_api_runs__run_id__stream_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "After"
             }
           }
         ],

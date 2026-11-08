@@ -253,9 +253,9 @@ def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None, run_i
     return summarize(run_id, *drive("UC-02", run_id, trip_id, state, client, tools))
 
 
-def resume(trip_id, approval_id, decision, response=None, client=None, tools=None):
-    """Người dùng trả lời 1 interrupt đang chờ → chạy tiếp graph từ điểm dừng (đọc checkpoint, không cần process cũ).
-    Trả None nếu không có yêu cầu đang chờ với approval_id đó (sai trip, đã trả lời rồi)."""
+def claim(trip_id, approval_id, decision, response=None):
+    """Ghi câu trả lời của người dùng cho 1 interrupt đang chờ, đặt run về running. Trả run_id, None nếu không còn chờ.
+    Tách khỏi resume để API chạy nền: ghi đồng bộ trước, stream mở ngay sau đó đã thấy run đang chạy."""
     if decision not in DECISIONS:
         raise ValueError(f"decision phải thuộc {DECISIONS}")
     rows = repo.query(  # 1 câu UPDATE: bấm 2 lần thì lần 2 không còn dòng pending
@@ -269,9 +269,20 @@ def resume(trip_id, approval_id, decision, response=None, client=None, tools=Non
     repo.log_event(run_id, "approval", "approval", name=rows[0]["kind"],
                    result={"approval_id": approval_id, "decision": decision, "response": response})  # fmt: skip
     repo.query("UPDATE runs SET status = 'running', ended_at = NULL WHERE run_id = ?", (run_id,))
+    return run_id
+
+
+def resume_claimed(run_id, trip_id, decision, response=None, client=None, tools=None):
     uc = repo.query("SELECT uc FROM runs WHERE run_id = ?", (run_id,))[0]["uc"]
     command = Command(resume={"decision": decision, "response": response})
     return summarize(run_id, *drive(uc, run_id, trip_id, command, client, tools))
+
+
+def resume(trip_id, approval_id, decision, response=None, client=None, tools=None):
+    """Người dùng trả lời 1 interrupt đang chờ → chạy tiếp graph từ điểm dừng (đọc checkpoint, không cần process cũ).
+    Trả None nếu không có yêu cầu đang chờ với approval_id đó (sai trip, đã trả lời rồi)."""
+    run_id = claim(trip_id, approval_id, decision, response)
+    return run_id and resume_claimed(run_id, trip_id, decision, response, client, tools)
 
 
 def continue_run(trip_id, client=None, tools=None):
