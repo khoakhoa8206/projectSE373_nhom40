@@ -88,7 +88,10 @@ export async function api<T>(path: string, init?: { method?: "POST"; json?: unkn
       body: init?.json === undefined ? undefined : JSON.stringify(init.json),
     });
   } catch {
-    throw new ApiError(0, "Không kết nối được máy chủ. Kiểm tra mạng hoặc chạy `make dev`.");
+    // PWA mở được khi mất mạng (service worker cache khung app) nhưng agent, lịch trình, bản đồ vẫn cần mạng
+    throw new ApiError(0, navigator.onLine
+      ? "Không kết nối được máy chủ. Kiểm tra mạng hoặc chạy `make dev`."
+      : "Thiết bị đang mất mạng. Agent và lịch trình cần mạng, hãy bật mạng rồi thử lại.");
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, describe(res.status, data?.detail), data?.detail);
