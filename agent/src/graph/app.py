@@ -1,10 +1,14 @@
-"""Graph UC-02: load_profile → plan → validate → (còn vi phạm và < 4 vòng thì quay lại plan) → finalize.
-Chạy có checkpointer SQLite (thread_id = trip_id): backend chết giữa chừng thì continue_run chạy tiếp đúng node."""
+"""Graph UC-02: load_profile → plan → validate → (còn vi phạm và < 4 vòng thì quay lại plan) → finalize
+→ approve (người dùng duyệt / sửa / từ chối, chỉ khi approval=True) → END, hoặc quay lại plan nếu người dùng sửa.
+Chạy có checkpointer SQLite (thread_id = trip_id): backend chết giữa chừng thì continue_run chạy tiếp đúng node;
+graph đang chờ người dùng thì resume chạy tiếp sau khi người dùng trả lời, kể cả khi backend đã restart."""
 
+import json
 import time
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
 from openai import InternalServerError, RateLimitError
 
 from agent.db import repo
@@ -15,6 +19,8 @@ from agent.src.nodes.plan import plan
 from agent.src.validation.validator import check_fabrication, validate
 
 MAX_ROUNDS = 4
+INTERRUPT_KINDS = ("ask_user", "itinerary_approval", "memory_save")  # khớp approvals.kind
+DECISIONS = ("approved", "rejected", "edited")
 
 
 class State(TypedDict, total=False):
@@ -33,6 +39,9 @@ class State(TypedDict, total=False):
     planning_stopped: bool
     planning_warning: str
     context: dict  # ứng viên + dự báo lấy ở vòng đầu, vòng sửa dùng lại
+    approval: bool  # có dừng chờ người dùng duyệt lịch trình không (API: có; eval/test cũ: không)
+    decision: str  # quyết định gần nhất của người dùng ở bước duyệt
+    user_feedback: str | None  # ghi chú khi người dùng chọn "sửa", plan dùng làm yêu cầu cho lượt mới
 
 
 def default_tools():
@@ -132,17 +141,46 @@ def finalize(state):
     return {"itinerary": itinerary}
 
 
+def ask_human(kind, data):
+    """Dừng graph chờ người dùng (W8-P1-2): ask_user (UC-01), duyệt lịch trình, đồng ý lưu bộ nhớ (UC-07).
+    drive() ghi approvals + trace và trả payload {kind, approval_id, data} cho PWA. Khi người dùng trả lời, LangGraph
+    chạy LẠI node từ đầu và lời gọi này trả {"decision": approved|rejected|edited, "response": ...}.
+    => Code đứng trước ask_human trong node phải chạy lại được (không ghi DB, không gọi LLM trước nó)."""
+    if kind not in INTERRUPT_KINDS:
+        raise ValueError(f"kind phải thuộc {INTERRUPT_KINDS}")
+    return interrupt({"kind": kind, "data": data})
+
+
+def approve(state):
+    """Người dùng duyệt lịch trình: duyệt → approved; sửa → lập lại theo ghi chú; từ chối → quay về hồ sơ."""
+    itinerary = state["itinerary"]
+    answer = ask_human("itinerary_approval", {"itinerary_id": itinerary.itinerary_id, "status": itinerary.status})
+    decision, ts = answer["decision"], repo.now()
+    if decision == "approved":
+        repo.query("UPDATE itineraries SET status = 'approved' WHERE itinerary_id = ?", (itinerary.itinerary_id,))
+        repo.query("UPDATE trips SET status = 'approved', updated_at = ? WHERE trip_id = ?", (ts, state["trip_id"]))
+        return {"decision": decision, "itinerary": itinerary.model_copy(update={"status": "approved"})}
+    if decision == "edited":  # lượt lập lịch mới (đủ 4 vòng) dựa trên bản vừa xem + ghi chú của người dùng
+        return {"decision": decision, "user_feedback": str(answer.get("response") or ""), "round": 0, "violations": [],
+                "history": [], "itinerary_id": repo.new_id("it"), "best_itinerary": None, "best_violations": None,
+                "best_score": None, "planning_stopped": False, "planning_warning": None}  # fmt: skip
+    repo.query("UPDATE trips SET status = 'profiling', updated_at = ? WHERE trip_id = ?", (ts, state["trip_id"]))
+    return {"decision": decision}
+
+
 def build_uc02(client, tools, usage):
     g = StateGraph(State)
     g.add_node("load_profile", traced("load_profile", load_profile))
     g.add_node("plan", traced("plan", lambda s: plan_or_keep_best(s, client, tools, usage)))
     g.add_node("validate", traced("validate", check))
     g.add_node("finalize", traced("finalize", finalize))
+    g.add_node("approve", traced("approve", approve))
     g.add_edge(START, "load_profile")
     g.add_edge("load_profile", "plan")
     g.add_conditional_edges("plan", lambda s: "finalize" if s.get("planning_stopped") else "validate")
     g.add_conditional_edges("validate", lambda s: "plan" if s["violations"] and s["round"] < MAX_ROUNDS else "finalize")
-    g.add_edge("finalize", END)
+    g.add_conditional_edges("finalize", lambda s: "approve" if s.get("approval") else END)
+    g.add_conditional_edges("approve", lambda s: "plan" if s["decision"] == "edited" else END)
     return g
 
 
@@ -150,8 +188,10 @@ GRAPHS = {"UC-02": build_uc02}  # runs.uc → hàm dựng graph; UC khác đăng
 
 
 def drive(uc, run_id, trip_id, graph_input, client=None, tools=None):
-    """Chạy graph trên thread trip_id tới END (hoặc lỗi), cộng token/độ trễ vào runs. Trả state cuối, None nếu lỗi.
-    graph_input = dict: lượt chạy mới (xoá checkpoint cũ của trip); None: chạy tiếp từ checkpoint cuối."""
+    """Chạy graph trên thread trip_id tới END / interrupt / lỗi, cộng token và độ trễ vào runs. Trả (state cuối, lỗi).
+    graph_input = dict: lượt chạy mới (xoá checkpoint cũ của trip); None: chạy tiếp từ checkpoint cuối;
+    Command(resume=...): câu trả lời của người dùng cho interrupt đang chờ.
+    Dừng ở interrupt: ghi approvals (pending) + trace kind 'approval', runs.status = interrupted."""
     usage = {"in": 0, "out": 0, "cost": 0.0}
     t0 = time.perf_counter()
     out, error = None, None
@@ -163,43 +203,88 @@ def drive(uc, run_id, trip_id, graph_input, client=None, tools=None):
         repo.log_event(run_id, "setup", "error", error=error)
     if error is None:
         with open_checkpointer() as saver:
-            if graph_input is not None:
+            if isinstance(graph_input, dict):
                 saver.delete_thread(trip_id)  # lượt mới không được kế thừa best_* của lượt trước
             graph = GRAPHS[uc](client, tools, usage).compile(checkpointer=saver)
             try:
                 out = graph.invoke(graph_input, config(trip_id))
             except Exception as e:  # noqa: BLE001 — lỗi nào cũng phải đóng run và trả run_id
                 error = f"{type(e).__name__}: {e}"
-    repo.finish_run(run_id, "failed" if error else "succeeded", usage["in"], usage["out"], usage["cost"], ms(t0))
+    pending = (out or {}).get("__interrupt__") or []
+    for item in pending:
+        payload = item.value | {"approval_id": repo.new_id("ap")}
+        repo.query(
+            "INSERT INTO approvals (approval_id, trip_id, run_id, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (payload["approval_id"], trip_id, run_id, payload["kind"], json.dumps(payload, ensure_ascii=False), repo.now()),
+        )
+        repo.log_event(run_id, "approval", "approval", name=payload["kind"], result=payload)
+    status = "failed" if error else "interrupted" if pending else "succeeded"
+    repo.finish_run(run_id, status, usage["in"], usage["out"], usage["cost"], ms(t0))
     return out, error
 
 
-def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None, run_id=None):
-    """Chạy 1 lượt UC-02 và luôn đóng run (token, chi phí, độ trễ). Trả {run_id, itinerary_id, status, error}."""
-    run_id = run_id or repo.create_run("UC-02", trip_id, user_id, eval_case_id)
-    out, error = drive("UC-02", run_id, trip_id, {"run_id": run_id, "trip_id": trip_id, "itinerary_id": repo.new_id("it")},
-                       client, tools)  # fmt: skip
-    return uc02_result(run_id, out, error)
+def pending_approvals(trip_id, run_id=None):
+    """Payload các interrupt đang chờ người dùng của trip (PWA tải lại trang vẫn thấy câu hỏi / nút duyệt)."""
+    rows = repo.query(
+        "SELECT payload FROM approvals WHERE trip_id = ? AND decision = 'pending' AND (? IS NULL OR run_id = ?)"
+        " ORDER BY created_at",
+        (trip_id, run_id, run_id),
+    )
+    return [json.loads(r["payload"]) for r in rows]
 
 
-def uc02_result(run_id, out, error):
+def summarize(run_id, out, error):
+    """{run_id, itinerary_id, status, error, interrupt}; status = trạng thái lịch trình nếu graph có lịch trình."""
     if error:
-        return {"run_id": run_id, "itinerary_id": None, "status": "error", "error": error}
-    return {"run_id": run_id, "itinerary_id": out["itinerary"].itinerary_id, "status": out["itinerary"].status,
-            "error": None}  # fmt: skip
+        return {"run_id": run_id, "itinerary_id": None, "status": "error", "error": error, "interrupt": None}
+    trip_id = repo.query("SELECT trip_id FROM runs WHERE run_id = ?", (run_id,))[0]["trip_id"]
+    pending = pending_approvals(trip_id, run_id)
+    it = out.get("itinerary")
+    status = it.status if it else "interrupted" if pending else "succeeded"
+    return {"run_id": run_id, "itinerary_id": it and it.itinerary_id, "status": status, "error": None,
+            "interrupt": pending[0] if pending else None}  # fmt: skip
+
+
+def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None, run_id=None, approval=False):
+    """Chạy 1 lượt UC-02 và luôn đóng run (token, chi phí, độ trễ). approval=True: dừng chờ người dùng duyệt.
+    Trả {run_id, itinerary_id, status, error, interrupt}."""
+    run_id = run_id or repo.create_run("UC-02", trip_id, user_id, eval_case_id)
+    state = {"run_id": run_id, "trip_id": trip_id, "itinerary_id": repo.new_id("it"), "approval": approval}
+    return summarize(run_id, *drive("UC-02", run_id, trip_id, state, client, tools))
+
+
+def resume(trip_id, approval_id, decision, response=None, client=None, tools=None):
+    """Người dùng trả lời 1 interrupt đang chờ → chạy tiếp graph từ điểm dừng (đọc checkpoint, không cần process cũ).
+    Trả None nếu không có yêu cầu đang chờ với approval_id đó (sai trip, đã trả lời rồi)."""
+    if decision not in DECISIONS:
+        raise ValueError(f"decision phải thuộc {DECISIONS}")
+    rows = repo.query(  # 1 câu UPDATE: bấm 2 lần thì lần 2 không còn dòng pending
+        "UPDATE approvals SET decision = ?, user_response = ?, decided_at = ? WHERE approval_id = ? AND trip_id = ?"
+        " AND decision = 'pending' RETURNING run_id, kind",
+        (decision, json.dumps(response, ensure_ascii=False), repo.now(), approval_id, trip_id),
+    )
+    if not rows:
+        return None
+    run_id = rows[0]["run_id"]
+    repo.log_event(run_id, "approval", "approval", name=rows[0]["kind"],
+                   result={"approval_id": approval_id, "decision": decision, "response": response})  # fmt: skip
+    repo.query("UPDATE runs SET status = 'running', ended_at = NULL WHERE run_id = ?", (run_id,))
+    uc = repo.query("SELECT uc FROM runs WHERE run_id = ?", (run_id,))[0]["uc"]
+    command = Command(resume={"decision": decision, "response": response})
+    return summarize(run_id, *drive(uc, run_id, trip_id, command, client, tools))
 
 
 def continue_run(trip_id, client=None, tools=None):
     """Backend chết khi graph đang chạy: chạy tiếp từ checkpoint cuối của trip, không lặp lại node đã xong.
-    Trả None nếu trip không có lượt chạy dở."""
+    Trả None nếu trip không có lượt chạy dở (đã xong, hoặc đang chờ người dùng: khi đó dùng resume)."""
     with open_checkpointer() as saver:
         snapshot = saver.get_tuple(config(trip_id))
         if snapshot is None:
             return None
         run_id = snapshot.checkpoint["channel_values"]["run_id"]
         uc = repo.query("SELECT uc FROM runs WHERE run_id = ?", (run_id,))[0]["uc"]
-        if not GRAPHS[uc](None, None, {}).compile(checkpointer=saver).get_state(config(trip_id)).next:
+        state = GRAPHS[uc](None, None, {}).compile(checkpointer=saver).get_state(config(trip_id))
+        if not state.next or state.interrupts:
             return None
     repo.query("UPDATE runs SET status = 'running', ended_at = NULL WHERE run_id = ?", (run_id,))
-    out, error = drive(uc, run_id, trip_id, None, client, tools)
-    return uc02_result(run_id, out, error)
+    return summarize(run_id, *drive(uc, run_id, trip_id, None, client, tools))

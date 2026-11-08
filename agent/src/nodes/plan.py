@@ -40,7 +40,9 @@ previous_facts trong context là kết quả tool của bản trước: tái s�
 Ở vòng sửa: ưu tiên sửa các slot bị lỗi, giữ điểm/ngày/slot đã đúng; không đổi toàn lịch làm phát sinh nhiều tra cứu.
 travel_minutes_from_prev phải khớp chặng từ POI trước đó CÙNG NGÀY (bỏ qua slot nghỉ), không mang chặng qua đêm.
 Để đủ gap, start hiện tại >= end slot ngay trước + travel, kể cả sau slot nghỉ; slot nghỉ travel=null.
-Nếu không đủ thời gian/dữ liệu, giảm điểm hoặc ghi chưa đáp ứng, không gọi tool nối tiếp mãi để hoàn thiện mọi thứ."""
+Nếu không đủ thời gian/dữ liệu, giảm điểm hoặc ghi chưa đáp ứng, không gọi tool nối tiếp mãi để hoàn thiện mọi thứ.
+9. user_feedback (nếu có) là yêu cầu sửa của người dùng cho previous_itinerary: làm theo trong giới hạn hồ sơ,
+dữ liệu và các quy tắc trên; không làm được thì giữ bản bảo thủ và ghi rõ lý do trong note."""
 
 
 def previous_facts(state, by_name):
@@ -141,6 +143,7 @@ def plan(state, client, tools, usage):
             "profile": state["profile"].model_dump(mode="json"),
             "previous_itinerary": previous and [s.model_dump(mode="json") for s in previous.slots],
             "violations_to_fix": [v.model_dump() for v in state["violations"]],
+            "user_feedback": state.get("user_feedback"),
             "verified_context": context,
         },
         ensure_ascii=False,

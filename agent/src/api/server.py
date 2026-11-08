@@ -4,16 +4,17 @@ Người dùng lấy từ session cookie (POST /api/session), không bao giờ t
 import json
 import os
 import secrets
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
 from agent.db import repo
 from agent.db.init import FICTIONAL_USERS
 from agent.schemas import TripProfile
-from agent.src.graph.app import run_uc02
+from agent.src.graph import app as graph
 
 load_dotenv()
 USERS = {user_id: (name, lang) for user_id, name, lang in FICTIONAL_USERS}
@@ -69,11 +70,60 @@ def create_trip(profile: TripProfile, user_id: str = Depends(current_user)):
 
 @app.post("/api/trips/{trip_id}/plan")
 def plan_trip(trip_id: str, user_id: str = Depends(current_user)):
-    """Chạy graph UC-02 (đồng bộ, có thể mất 1–2 phút). Lỗi → 500 kèm run_id để xem trace."""
+    """Chạy graph UC-02 (đồng bộ, có thể mất 1–2 phút) tới bước người dùng duyệt: kết quả có `interrupt`
+    (kind = itinerary_approval) để gửi lại qua /resume. Lỗi → 500 kèm run_id để xem trace."""
     own_trip(trip_id, user_id)
     repo.query("UPDATE trips SET status = 'planning', updated_at = ? WHERE trip_id = ?", (repo.now(), trip_id))
-    result = run_uc02(trip_id, user_id)
+    result = graph.run_uc02(trip_id, user_id, approval=True)
     if result["error"]:
+        raise HTTPException(500, result)
+    return result
+
+
+@app.get("/api/trips/{trip_id}/approvals")
+def list_approvals(trip_id: str, user_id: str = Depends(current_user)):
+    """Các câu hỏi / bước duyệt đang chờ người dùng: [{kind, approval_id, data}]. Tải lại trang vẫn thấy."""
+    own_trip(trip_id, user_id)
+    return graph.pending_approvals(trip_id)
+
+
+class ResumeIn(BaseModel):
+    approval_id: str
+    decision: Literal["approved", "rejected", "edited"]
+    response: Any = None  # ask_user: câu trả lời; edited: ghi chú sửa; memory_save: các mục được chọn
+
+
+@app.post("/api/trips/{trip_id}/resume")
+def resume_trip(trip_id: str, body: ResumeIn, user_id: str = Depends(current_user)):
+    """Trả lời 1 interrupt → graph chạy tiếp đúng chỗ dừng (đọc checkpoint, backend restart vẫn được)."""
+    own_trip(trip_id, user_id)
+    result = graph.resume(trip_id, body.approval_id, body.decision, body.response)
+    if result is None:
+        raise HTTPException(409, "Không có yêu cầu đang chờ với approval_id này (đã trả lời hoặc sai chuyến đi)")
+    if result["error"]:
+        raise HTTPException(500, result)
+    return result
+
+
+class MessageIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+@app.post("/api/trips/{trip_id}/messages")
+def post_message(trip_id: str, body: MessageIn, user_id: str = Depends(current_user)):
+    """UC-01 hội thoại: lưu tin nhắn; đang có câu hỏi ask_user thì tin nhắn là câu trả lời (resume),
+    không thì bắt đầu lượt UC-01 mới (graph UC-01 do P2 đăng ký vào GRAPHS)."""
+    own_trip(trip_id, user_id)
+    repo.add_message(trip_id, user_id, "user", body.text)
+    asking = [p for p in graph.pending_approvals(trip_id) if p["kind"] == "ask_user"]
+    if asking:
+        result = graph.resume(trip_id, asking[0]["approval_id"], "approved", body.text)
+    elif "UC-01" in graph.GRAPHS:
+        run_id = repo.create_run("UC-01", trip_id, user_id)
+        result = graph.summarize(run_id, *graph.drive("UC-01", run_id, trip_id, {"run_id": run_id, "trip_id": trip_id}))
+    else:
+        raise HTTPException(501, "UC-01 hội thoại chưa được đăng ký (W8-P2-1)")
+    if result is None or result["error"]:
         raise HTTPException(500, result)
     return result
 
