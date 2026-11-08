@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, type ApiError, type MemoryItem, type MemoryList } from "../api";
+import { api, type ApiError, type MemoryList, type SavedMemory } from "../api";
 
-const KIND_LABEL: Record<MemoryItem["kind"], string> = {
+const KIND_LABEL: Record<SavedMemory["kind"], string> = {
   interest: "Sở thích",
   pace: "Nhịp đi",
   food_like: "Món thích",

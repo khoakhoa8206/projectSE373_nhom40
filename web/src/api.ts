@@ -44,7 +44,7 @@ export type Itinerary = {
   violations: { violation_id: number; slot_id: string | null; rule: string; severity: string; message: string }[];
 };
 
-export type MemoryItem = {
+export type SavedMemory = {
   memory_id: string;
   kind: "food_like" | "food_dislike" | "allergy" | "dietary" | "pace" | "interest" | "visited_city" | "other";
   value: string;
@@ -54,7 +54,7 @@ export type MemoryItem = {
   expires_at: string;
 };
 
-export type MemoryList = { items: MemoryItem[]; sensitive_consent: boolean };
+export type MemoryList = { items: SavedMemory[]; sensitive_consent: boolean };
 
 export type PlanResult ={ run_id: string; itinerary_id: string | null; status: string; error: string | null };
 
