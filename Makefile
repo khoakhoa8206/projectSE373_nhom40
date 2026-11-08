@@ -13,7 +13,7 @@ dev:  ## mock-weather :8081 + backend :8000 + web :5173
 	$(PY) scripts/dev.py
 
 eval:
-	$(PY) -m evals.run --uc UC-02
+	$(PY) -m evals.run --all
 
 test:
 	$(PY) -m ruff check .
