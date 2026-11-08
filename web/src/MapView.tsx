@@ -1,6 +1,7 @@
 import L from "leaflet";
 import { useEffect, useRef } from "react";
-import { api, type Poi, type Slot } from "./api";
+import type { Poi, Slot } from "./api";
+import type { Coords } from "./location";
 
 const HUE: L.LatLngTuple = [16.4637, 107.5909];
 export const DAY_COLORS = ["#0f5f73", "#c2410c", "#7c3aed", "#15803d", "#be123c"];
@@ -15,11 +16,13 @@ function popup(s: Slot): HTMLElement {
   return div;
 }
 
-/** Bản đồ OSM: marker đánh số theo thứ tự trong ngày + đường nối các điểm (mỗi ngày một màu). */
-export default function MapView({ slots }: { slots: Slot[] }) {
+/** Bản đồ OSM: mọi POI + marker đánh số theo thứ tự trong ngày + đường nối các điểm (mỗi ngày một màu) + vị trí người dùng nếu có. */
+export default function MapView({ slots, pois, here }: { slots: Slot[]; pois: Poi[]; here?: Coords | null }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
+  const hereLayer = useRef<L.LayerGroup | null>(null);
+  const poiLayer = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
     const m = L.map(el.current!).setView(HUE, 13);
@@ -28,21 +31,34 @@ export default function MapView({ slots }: { slots: Slot[] }) {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(m);
     map.current = m;
-    // Mọi POI Huế từ GET /api/pois (chấm nhỏ, màu theo loại); lịch trình vẽ đè lên trên.
-    const pois = L.layerGroup().addTo(m);
-    api<Poi[]>("/pois").then(
-      (list) =>
-        list.forEach((p) => {
-          const name = document.createElement("span");
-          name.textContent = p.name_vi; // dữ liệu từ DB, không chèn thành HTML
-          const color = POI_COLORS[p.category];
-          L.circleMarker([p.lat, p.lon], { radius: 5, color, weight: 1, fillOpacity: 0.7 }).bindTooltip(name).addTo(pois);
-        }),
-      () => {}, // không tải được POI thì bản đồ vẫn dùng được
-    );
+    poiLayer.current = L.layerGroup().addTo(m); // lịch trình vẽ đè lên trên
     layer.current = L.layerGroup().addTo(m);
+    hereLayer.current = L.layerGroup().addTo(m);
     return () => void m.remove();
   }, []);
+
+  // Mọi POI Huế (chấm nhỏ, màu theo loại)
+  useEffect(() => {
+    const group = poiLayer.current!;
+    group.clearLayers();
+    pois.forEach((p) => {
+      const name = document.createElement("span");
+      name.textContent = p.name_vi; // dữ liệu từ DB, không chèn thành HTML
+      const color = POI_COLORS[p.category];
+      L.circleMarker([p.lat, p.lon], { radius: 5, color, weight: 1, fillOpacity: 0.7 }).bindTooltip(name).addTo(group);
+    });
+  }, [pois]);
+
+  // Vị trí người dùng chỉ vẽ trên bản đồ ở trình duyệt, không gửi đi đâu
+  useEffect(() => {
+    const group = hereLayer.current!;
+    group.clearLayers();
+    if (!here) return;
+    const pt: L.LatLngTuple = [here.lat, here.lon];
+    if (here.accuracy_m) L.circle(pt, { radius: here.accuracy_m, color: "#2563eb", weight: 1, fillOpacity: 0.1 }).addTo(group);
+    L.circleMarker(pt, { radius: 8, color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 }).bindTooltip("Bạn ở đây").addTo(group);
+    map.current!.setView(pt, 15);
+  }, [here]);
 
   useEffect(() => {
     const group = layer.current!;
