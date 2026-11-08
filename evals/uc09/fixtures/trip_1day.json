@@ -1,0 +1,68 @@
+{
+ "fixture_id": "uc09-1day",
+ "description": "Chuyến 1 ngày đúng kế hoạch (hư cấu)",
+ "days": 1,
+ "expected_total_vnd": 320000,
+ "expected_day_totals": {
+  "1": 320000
+ },
+ "events": [
+  {
+   "event_id": "ev-1d-01",
+   "occurred_at": "2026-11-20T08:10:00+07:00",
+   "day_index": 1,
+   "event_type": "slot_done",
+   "poi_id": "hue-dai-noi"
+  },
+  {
+   "event_id": "ev-1d-02",
+   "occurred_at": "2026-11-20T08:15:00+07:00",
+   "day_index": 1,
+   "event_type": "expense",
+   "poi_id": "hue-dai-noi",
+   "amount_vnd": 200000,
+   "payload": {
+    "category": "tickets",
+    "label": "vé tham quan Đại Nội"
+   }
+  },
+  {
+   "event_id": "ev-1d-03",
+   "occurred_at": "2026-11-20T10:30:00+07:00",
+   "day_index": 1,
+   "event_type": "photo_meta",
+   "poi_id": "hue-dien-thai-hoa",
+   "payload": {
+    "caption": "Mái điện Thái Hòa"
+   }
+  },
+  {
+   "event_id": "ev-1d-04",
+   "occurred_at": "2026-11-20T12:00:00+07:00",
+   "day_index": 1,
+   "event_type": "expense",
+   "poi_id": "hue-quan-hanh",
+   "amount_vnd": 120000,
+   "payload": {
+    "category": "food",
+    "label": "bữa trưa bánh bèo, bánh khoái"
+   }
+  },
+  {
+   "event_id": "ev-1d-05",
+   "occurred_at": "2026-11-20T15:30:00+07:00",
+   "day_index": 1,
+   "event_type": "slot_done",
+   "poi_id": "hue-chua-thien-mu"
+  },
+  {
+   "event_id": "ev-1d-06",
+   "occurred_at": "2026-11-20T17:45:00+07:00",
+   "day_index": 1,
+   "event_type": "note",
+   "payload": {
+    "text": "Hoàng hôn trên sông Hương rất đẹp."
+   }
+  }
+ ]
+}

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic_core import to_jsonable_python
 
-from agent.schemas import POI, Itinerary, TripProfile, Violation
+from agent.schemas import POI, Itinerary, TripEvent, TripProfile, Violation
 from agent.src.obs.trace import mask_coords, write_jsonl
 
 VN = timezone(timedelta(hours=7))  # Việt Nam không có giờ mùa hè
@@ -324,3 +324,72 @@ def kb_search_rows(lang=None, poi_id=None) -> list[dict]:
            ORDER BY CAST(c.vector_id AS INTEGER)""",
         {"lang": lang, "poi_id": poi_id},
     )
+
+
+# --- Nhật ký chuyến đi UC-09 (P3) ---
+def add_trip_event(ev: TripEvent) -> str:
+    """Ghi 1 sự kiện (gửi lại cùng event_id của cùng trip thì bỏ qua). slot_done/slot_skipped cập nhật
+    itinerary_slots.progress. Trả event_id; event_id đã thuộc trip khác → ValueError."""
+    event_id = ev.event_id or new_id("ev")
+    at = ev.occurred_at if ev.occurred_at.tzinfo else ev.occurred_at.replace(tzinfo=VN)
+    with closing(get_conn()) as conn, conn:
+        owner = conn.execute("SELECT trip_id FROM trip_events WHERE event_id = ?", (event_id,)).fetchone()
+        if owner and owner[0] != ev.trip_id:
+            raise ValueError(f"event_id {event_id} đã thuộc chuyến đi khác")
+        conn.execute(
+            """INSERT OR IGNORE INTO trip_events (event_id, trip_id, occurred_at, day_index, event_type, slot_id,
+                   poi_id, amount_vnd, payload, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (event_id, ev.trip_id, at.isoformat(timespec="seconds"), ev.day_index, ev.event_type, ev.slot_id, ev.poi_id,
+             ev.amount_vnd, _json(ev.payload), ev.created_by),
+        )  # fmt: skip
+        if ev.slot_id and ev.event_type in ("slot_done", "slot_skipped"):
+            conn.execute("UPDATE itinerary_slots SET progress = ? WHERE slot_id = ?",
+                         ("done" if ev.event_type == "slot_done" else "skipped", ev.slot_id))  # fmt: skip
+    return event_id
+
+
+def trip_events(trip_id, day_index=None) -> list[dict]:
+    """Sự kiện của chuyến (hoặc 1 ngày) theo thứ tự thời gian, kèm tên POI; payload đã parse JSON."""
+    rows = query(
+        """SELECT e.*, p.name_vi, p.name_en FROM trip_events e LEFT JOIN pois p USING (poi_id)
+           WHERE e.trip_id = ? AND (? IS NULL OR e.day_index = ?) ORDER BY e.day_index, e.occurred_at, e.event_id""",
+        (trip_id, day_index, day_index),
+    )
+    return [r | {"payload": json.loads(r["payload"])} for r in rows]
+
+
+def sum_expenses(trip_id, day_index=None) -> dict:
+    """Tổng chi do SQL cộng (SUM(amount_vnd) của sự kiện expense), không bao giờ để LLM tự cộng."""
+    row = query(
+        """SELECT COALESCE(SUM(amount_vnd), 0) AS total_vnd, COUNT(*) AS expense_count,
+                  COALESCE(json_group_array(event_id), '[]') AS event_ids
+           FROM trip_events WHERE trip_id = ? AND event_type = 'expense' AND (? IS NULL OR day_index = ?)""",
+        (trip_id, day_index, day_index),
+    )[0]
+    return {"total_vnd": row["total_vnd"], "expense_count": row["expense_count"],
+            "event_ids": [e for e in json.loads(row["event_ids"]) if e]}  # fmt: skip
+
+
+def save_journal(trip_id, scope, day_index, lang, content, event_ids, total_spent_vnd, tokens_before, tokens_after,
+                 run_id) -> str:
+    journal_id = new_id("j")
+    query(
+        """INSERT INTO journals (journal_id, trip_id, scope, day_index, lang, content, event_ids, total_spent_vnd,
+               tokens_before, tokens_after, run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (journal_id, trip_id, scope, day_index, lang, _json(content), _json(event_ids), total_spent_vnd, tokens_before,
+         tokens_after, run_id, now()),
+    )  # fmt: skip
+    return journal_id
+
+
+def latest_journal(trip_id, scope, day_index, lang):
+    """Nhật ký mới nhất cùng phạm vi + ngôn ngữ (content, event_ids đã parse JSON), None nếu chưa có."""
+    rows = query(
+        """SELECT * FROM journals WHERE trip_id = ? AND scope = ? AND day_index IS ? AND lang = ?
+           ORDER BY created_at DESC, rowid DESC LIMIT 1""",
+        (trip_id, scope, day_index, lang),
+    )
+    if not rows:
+        return None
+    return rows[0] | {"content": json.loads(rows[0]["content"]), "event_ids": json.loads(rows[0]["event_ids"])}
+
