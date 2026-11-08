@@ -1,18 +1,25 @@
-# Kho tri thức Huế (P3-4 · UC-03)
+# Kho tri thức Huế (UC-03)
 
-- `catalog.csv` (UTF-8 có BOM để Excel hiển thị đúng dấu; trong Python đọc bằng `encoding="utf-8-sig"`): 60 tài liệu, chỉ gồm Huế: 15 cặp Việt–Anh, 8 chỉ tiếng Việt, 5 chỉ tiếng Anh, 5 tổng quan, 10 tình huống,
-  2 tài liệu cài chỉ dẫn (hư cấu). `status = written` (15 tài liệu, có file trong `docs/`) hoặc `planned` (45 tài liệu).
+- `catalog.csv` (UTF-8 có BOM để Excel hiển thị đúng dấu; trong Python đọc bằng `encoding="utf-8-sig"`): 63 tài liệu, chỉ
+  gồm Huế, tất cả đã viết (`status = written`, cột `file` trỏ tới file trong `kb/`): 25 cặp Việt–Anh (cùng
+  `translation_group`, gồm cả tài liệu tình huống/khẩn cấp: số 112–115, đường dây nóng du lịch Huế, khí hậu – mùa lũ,
+  đi lại, ứng xử), 6 tài liệu chỉ tiếng Việt và 5 chỉ tiếng Anh (đích của câu hỏi xuyên ngôn ngữ), 2 tài liệu hư cấu
+  cài chỉ dẫn để kiểm thử chống injection.
 - 9 cột đầu của catalog trùng tên và thứ tự cột bảng `kb_documents` (`agent/db/schema.sql`): `doc_id`, `poi_id`, `lang`,
   `title`, `doc_type`, `is_fictional` (0/1), `source_url`, `license`, `retrieved_at`. `poi_id` rỗng = NULL. Các cột sau
   (`destination`, `translation_group`, `group`, `eval_purpose`, `source_title`, `status`, `file`, `notes`) phục vụ nạp kho và eval.
-- `docs/*.md`: front matter cùng các trường trên; mỗi tiêu đề `##` là một `section` (dùng trong trích dẫn `[doc_id §section]`).
-  Cuối mỗi file ghi nguồn, ngày truy cập, giấy phép.
-- Quy ước id: `poi_id` kiểu `hue-dai-noi` (`hue-` + tên không dấu, nối gạch ngang), phải có trong `pois` vì
-  `kb_documents.poi_id` là khoá ngoại; `doc_id` = `<chủ đề>-<lang>-<số>`, ví dụ `hue-dien-kien-trung-vi-01`.
-- Giấy phép: bài phỏng theo/dịch từ Wikipedia ghi CC BY-SA 4.0 kèm URL bài nguồn; tài liệu nhóm tự viết ghi CC BY 4.0.
-  Bản tiếng Việt của các cặp được nhóm dịch và tóm lược từ bài tiếng Anh (ghi ở cuối file).
+- `docs/*.md`: front matter cùng các trường trên; mỗi tiêu đề `##` là một `section` (dùng trong trích dẫn `[doc_id §section]`,
+  tên mục không trùng trong cùng tài liệu). Cuối mỗi file (sau dòng `---`) ghi nguồn, ngày truy cập, giấy phép.
+- Quy ước id: `poi_id` chỉ dùng mã có trong `data/destinations/hue/poi.csv` của P2 (khoá ngoại `kb_documents.poi_id → pois`),
+  tài liệu chung để trống; `doc_id` = `<chủ đề>-<lang>-<số>`, ví dụ `hue-dien-kien-trung-vi-01`.
+- Giấy phép: bài phỏng theo/dịch từ Wikipedia tiếng Anh ghi CC BY-SA 4.0 kèm URL bài nguồn (bản tiếng Việt do nhóm dịch và
+  tóm lược). Tài liệu số điện thoại (`hue-so-khan-cap-*`, `hue-duong-day-nong-du-lich-*`): số lấy từ trang chính thức
+  (`*.gov.vn`, `visithue.vn` của Sở Văn hóa, Thể thao và Du lịch thành phố Huế), nhóm tự tóm tắt, không chép nguyên văn,
+  ghi CC BY 4.0. Tài liệu nhóm tự viết ghi CC BY 4.0. Không rõ giấy phép thì không dùng.
 - Tài liệu `is_fictional = 1` (review “Nhà hàng Sông Hương Xanh”, thông báo bão giả) chỉ dùng kiểm thử chống injection,
   không bao giờ được trích làm dữ kiện.
+- `tests/test_p3_kb.py` kiểm: ≥ 60 tài liệu (không tính review), catalog ↔ file khớp 1–1, đủ `source_url`/`license`/
+  `retrieved_at`, front matter = catalog, `poi_id` có trong `poi.csv`, số điện thoại chỉ là số đã đối chiếu nguồn chính thức.
 
 ## Nạp kho và truy xuất (UC-03 · RAG)
 
