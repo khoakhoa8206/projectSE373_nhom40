@@ -257,3 +257,48 @@ def destination_facts() -> dict:
         return {"pois": {r["poi_id"]: dict(r) for r in conn.execute("SELECT * FROM pois")},
                 "matrix": [dict(r) for r in conn.execute("SELECT * FROM travel_matrix")],
                 "zones": [dict(r) for r in conn.execute("SELECT * FROM restricted_zones")]}
+
+
+# --- Kho tri thức UC-03 (P3) ---
+KB_DOC_COLS = ("doc_id", "poi_id", "lang", "title", "doc_type", "is_fictional", "source_url", "license", "retrieved_at")
+
+
+def save_kb(docs: list[dict], chunks: list[dict]) -> dict:
+    """Nạp lại kho tri thức trong 1 transaction (upsert theo id). Tài liệu/chunk không còn trong kho thì xoá, trừ chunk
+    đã có citations: giữ lại với vector_id = NULL (không còn được tìm thấy) để không mất lịch sử trích dẫn."""
+    with closing(get_conn()) as conn, conn:
+        conn.execute("UPDATE kb_chunks SET vector_id = NULL")
+        conn.executemany(
+            f"INSERT INTO kb_documents ({', '.join(KB_DOC_COLS)}) VALUES ({', '.join(':' + c for c in KB_DOC_COLS)})"
+            f" ON CONFLICT(doc_id) DO UPDATE SET {', '.join(f'{c} = excluded.{c}' for c in KB_DOC_COLS[1:])}",
+            docs,
+        )
+        conn.executemany(
+            """INSERT INTO kb_chunks (chunk_id, doc_id, section, chunk_index, text, vector_id)
+               VALUES (:chunk_id, :doc_id, :section, :chunk_index, :text, :vector_id)
+               ON CONFLICT(chunk_id) DO UPDATE SET doc_id = excluded.doc_id, section = excluded.section,
+                   chunk_index = excluded.chunk_index, text = excluded.text, vector_id = excluded.vector_id""",
+            chunks,
+        )
+        conn.execute(
+            "DELETE FROM kb_chunks WHERE vector_id IS NULL AND chunk_id NOT IN (SELECT chunk_id FROM citations)"
+        )
+        conn.execute(
+            "DELETE FROM kb_documents WHERE doc_id NOT IN (SELECT value FROM json_each(?))"
+            " AND doc_id NOT IN (SELECT doc_id FROM kb_chunks)",
+            (json.dumps([d["doc_id"] for d in docs]),),
+        )
+    return {"documents": len(docs), "chunks": len(chunks)}
+
+
+def kb_search_rows(lang=None, poi_id=None) -> list[dict]:
+    """Chunk đang có vector kèm metadata tài liệu (cho retriever), lọc tuỳ chọn theo lang, poi_id."""
+    return query(
+        """SELECT c.chunk_id, c.doc_id, c.section, c.chunk_index, c.text, c.vector_id, d.poi_id, d.lang, d.title,
+                  d.doc_type, d.is_fictional, d.source_url, d.license
+           FROM kb_chunks c JOIN kb_documents d USING (doc_id)
+           WHERE c.vector_id IS NOT NULL AND (:lang IS NULL OR d.lang = :lang)
+             AND (:poi_id IS NULL OR d.poi_id = :poi_id)
+           ORDER BY CAST(c.vector_id AS INTEGER)""",
+        {"lang": lang, "poi_id": poi_id},
+    )

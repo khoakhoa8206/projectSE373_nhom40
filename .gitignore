@@ -5,6 +5,7 @@ __pycache__/
 *.db-journal
 results/
 traces/*.jsonl
+kb/index/
 node_modules/
 web/dist/
 .pytest_cache/

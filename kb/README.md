@@ -13,3 +13,17 @@
   Bản tiếng Việt của các cặp được nhóm dịch và tóm lược từ bài tiếng Anh (ghi ở cuối file).
 - Tài liệu `is_fictional = 1` (review “Nhà hàng Sông Hương Xanh”, thông báo bão giả) chỉ dùng kiểm thử chống injection,
   không bao giờ được trích làm dữ kiện.
+
+## Nạp kho và truy xuất (UC-03 · RAG)
+
+- Nạp: `make db` (cần bảng `pois` vì `kb_documents.poi_id` là khoá ngoại) rồi `python -m agent.src.rag.ingest`.
+  Lệnh đọc `catalog.csv` + các file có cột `file` → ghi `kb_documents`, `kb_chunks` (1 mục `##` = 1 chunk, mục dài hơn
+  600 ký tự cắt tiếp theo đoạn/câu, giữ tên mục) → tính embedding → `kb/index/vectors.npy` + `kb/index/meta.json`
+  (gitignore, chạy lại lệnh là dựng lại). `kb_chunks.vector_id` = số dòng trong ma trận vector.
+- Embedding: `fastembed` + `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (ONNX, 384 chiều, không cần
+  torch). Lần đầu tự tải model ~220 MB vào cache của fastembed (đổi thư mục bằng biến `FASTEMBED_CACHE_PATH`).
+  Nội dung kho không đổi thì lần chạy sau dùng lại vector cũ (nạp vào DB mới không chạy lại model); `--force` để tính lại.
+- Thử truy xuất: `python -m agent.src.rag.retriever "When was Kien Trung Palace rebuilt?"` (thêm `--lang vi|en`,
+  `--poi hue-dai-noi`, `-k 5`). Tool cho agent: `retrieve_knowledge(query, lang=None, poi_id=None, k=5)` trong
+  `agent/src/rag/retriever.py`; mặc định không lọc ngôn ngữ nên câu hỏi tiếng Anh vẫn tìm ra tài liệu tiếng Việt.
+- Test (`tests/test_rag.py`) dùng embedder giả `tests/fake_embedder.py`: không tải model, không gọi mạng.
