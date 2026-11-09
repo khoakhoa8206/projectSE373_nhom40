@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type ApiError, type Itinerary, type PlanResult, type Slot, type TraceEvent, type TripProfile, type User } from "./api";
 import MapView, { DAY_COLORS } from "./MapView";
+import JournalPage from "./pages/Journal";
 import Memory from "./pages/Memory";
+import Narrate from "./pages/Narrate";
 
 const USER_KEY = "tourguide.user";
 const NO_SLOTS: Slot[] = [];
@@ -35,24 +37,34 @@ function addDays(d: string, n: number) {
   return t.toISOString().slice(0, 10);
 }
 
+// Chuyển trang bằng state đơn giản (không dùng router): UC-02 lịch trình, UC-03 thuyết minh, UC-09 nhật ký, UC-07 bộ nhớ.
+type Page = "plan" | "narrate" | "journal" | "memory";
+const PAGES: [Page, string][] = [["plan", "Lịch trình"], ["narrate", "Thuyết minh"], ["journal", "Nhật ký"], ["memory", "Bộ nhớ"]];
+
 export default function App() {
   const [user, setUser] = useState<User | null>(loadUser);
-  const [screen, setScreen] = useState<"plan" | "memory">("plan");
+  const [page, setPage] = useState<Page>("plan");
   const pick = (u: User | null) => {
     saveUser(u);
     setUser(u);
-    setScreen("plan");
+    setPage("plan");
   };
   return (
     <div className="app">
       <header className="top">
         <h1>Tour Guide Huế</h1>
         {user && (
+          <nav className="tabs">
+            {PAGES.map(([p, label]) => (
+              <button key={p} className={page === p ? "active" : undefined} onClick={() => setPage(p)}>
+                {label}
+              </button>
+            ))}
+          </nav>
+        )}
+        {user && (
           <span className="who">
             {user.display_name}
-            <button className="link" onClick={() => setScreen(screen === "plan" ? "memory" : "plan")}>
-              {screen === "plan" ? "Bộ nhớ" : "Lập lịch trình"}
-            </button>
             <button className="link" onClick={() => pick(null)}>
               Đổi người dùng
             </button>
@@ -61,8 +73,12 @@ export default function App() {
       </header>
       {!user ? (
         <UserPicker onPick={pick} />
-      ) : screen === "memory" ? (
+      ) : page === "memory" ? (
         <Memory onExpired={() => pick(null)} />
+      ) : page === "narrate" ? (
+        <Narrate user={user} onExpired={() => pick(null)} />
+      ) : page === "journal" ? (
+        <JournalPage user={user} onExpired={() => pick(null)} />
       ) : (
         <PlanScreen user={user} onExpired={() => pick(null)} />
       )}
