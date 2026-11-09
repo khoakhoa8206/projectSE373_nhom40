@@ -25,12 +25,15 @@ class State(TypedDict, total=False):
     round: int
     violations: list[Violation]  # vi phạm của vòng gần nhất
     history: list[tuple[int, Violation]]  # (vòng, vi phạm) của mọi vòng, để lưu cột resolved
-    best_itinerary: Itinerary
-    best_violations: list[Violation]
-    best_score: tuple[int, int, int]
+    best_itinerary: Itinerary | None
+    best_violations: list[Violation] | None
+    best_score: tuple[int, int, int] | None
     planning_stopped: bool
     planning_warning: str
     context: dict  # ứng viên + dự báo lấy ở vòng đầu, vòng sửa dùng lại
+    user_id: str
+    approval_decision: str
+    feedback: str
 
 
 def default_tools():
@@ -86,7 +89,7 @@ def check(state):
     score = (sum(v.severity == "high" for v in violations), len(violations),
              sum(v.severity == "medium" for v in violations))
     result = {"violations": violations, "history": state["history"] + [(state["round"], v) for v in violations]}
-    if "best_score" not in state or score < state["best_score"]:
+    if state.get("best_score") is None or score < state["best_score"]:
         result.update(best_itinerary=state["itinerary"].model_copy(deep=True), best_violations=violations, best_score=score)
     return result
 
@@ -96,7 +99,7 @@ def plan_or_keep_best(state, client, tools, usage):
     try:
         return plan(state, client, tools, usage)
     except (AgentLoopLimitError, RateLimitError, InternalServerError) as error:
-        if "best_itinerary" not in state:
+        if state.get("best_itinerary") is None:
             raise  # chưa có bản hợp lệ theo schema thì không tạo kết quả giả
         round_ = state["round"] + 1
         limited = isinstance(error, AgentLoopLimitError)
@@ -112,8 +115,8 @@ def plan_or_keep_best(state, client, tools, usage):
 
 
 def finalize(state):
-    remaining = state.get("best_violations", state["violations"])
-    best = state.get("best_itinerary", state["itinerary"])
+    remaining = state["best_violations"] if state.get("best_violations") is not None else state["violations"]
+    best = state.get("best_itinerary") or state["itinerary"]
     status = "failed_validation" if remaining else "validated"
     itinerary = best.model_copy(deep=True, update={"status": status, "planner_rounds": state["round"]})
     if state.get("planning_warning"):
@@ -176,3 +179,26 @@ def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None):
     repo.finish_run(run_id, "failed" if result["error"] else "succeeded", usage["in"], usage["out"], usage["cost"],
                     ms(t0))  # fmt: skip
     return result
+
+
+def build_approval_graph(client, tools, usage, checkpointer):
+    """P1 cấp checkpointer; giữ API run_uc02 Phase 1 để không phá caller cũ."""
+    from agent.src.nodes.approve import approve
+
+    if checkpointer is None:
+        raise ValueError("Graph duyệt cần checkpointer và thread_id=trip_id do P1 cung cấp.")
+    graph = StateGraph(State)
+    graph.add_node("load_profile", traced("load_profile", load_profile))
+    graph.add_node("plan", traced("plan", lambda state: plan_or_keep_best(state, client, tools, usage)))
+    graph.add_node("validate", traced("validate", check))
+    graph.add_node("finalize", traced("finalize", finalize))
+    graph.add_node("approve", approve)
+    graph.add_edge(START, "load_profile")
+    graph.add_edge("load_profile", "plan")
+    graph.add_conditional_edges("plan", lambda state: "finalize" if state.get("planning_stopped") else "validate")
+    graph.add_conditional_edges("validate", lambda state:
+                               "plan" if state["violations"] and state["round"] < MAX_ROUNDS else "finalize")
+    graph.add_edge("finalize", "approve")
+    graph.add_conditional_edges("approve", lambda state:
+                               "plan" if state["approval_decision"] == "edited" and state["round"] < MAX_ROUNDS else END)
+    return graph.compile(checkpointer=checkpointer)
