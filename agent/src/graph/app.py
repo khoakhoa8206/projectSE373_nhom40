@@ -46,6 +46,8 @@ class State(TypedDict, total=False):
     user_feedback: str | None  # ghi chú khi người dùng chọn "sửa", plan dùng làm yêu cầu cho lượt mới
     user_id: str
     memory: list[dict]  # UC-07: sở thích người dùng đã đồng ý lưu từ chuyến trước, plan dùng để ưu tiên
+    approval_decision: str  # graph duyệt riêng của P2 (build_approval_graph)
+    feedback: str
 
 
 def default_tools():
@@ -333,3 +335,26 @@ def continue_run(trip_id, client=None, tools=None):
             return None
     repo.query("UPDATE runs SET status = 'running', ended_at = NULL WHERE run_id = ?", (run_id,))
     return summarize(run_id, *drive(uc, run_id, trip_id, None, client, tools))
+
+
+def build_approval_graph(client, tools, usage, checkpointer):
+    """P1 cấp checkpointer; giữ API run_uc02 Phase 1 để không phá caller cũ."""
+    from agent.src.nodes.approve import approve
+
+    if checkpointer is None:
+        raise ValueError("Graph duyệt cần checkpointer và thread_id=trip_id do P1 cung cấp.")
+    graph = StateGraph(State)
+    graph.add_node("load_profile", traced("load_profile", load_profile))
+    graph.add_node("plan", traced("plan", lambda state: plan_or_keep_best(state, client, tools, usage)))
+    graph.add_node("validate", traced("validate", check))
+    graph.add_node("finalize", traced("finalize", finalize))
+    graph.add_node("approve", approve)
+    graph.add_edge(START, "load_profile")
+    graph.add_edge("load_profile", "plan")
+    graph.add_conditional_edges("plan", lambda state: "finalize" if state.get("planning_stopped") else "validate")
+    graph.add_conditional_edges("validate", lambda state:
+                               "plan" if state["violations"] and state["round"] < MAX_ROUNDS else "finalize")
+    graph.add_edge("finalize", "approve")
+    graph.add_conditional_edges("approve", lambda state:
+                               "plan" if state["approval_decision"] == "edited" and state["round"] < MAX_ROUNDS else END)
+    return graph.compile(checkpointer=checkpointer)

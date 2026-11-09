@@ -54,6 +54,8 @@ description: Xếp lịch trình nhiều ngày ở Huế từ TripProfile, chỉ
    `note` phải nói rõ giờ/giá/khả năng đi bộ chưa xác minh. Slot nghỉ: poi_id=null, cost_vnd=null,
    cost_source=unverified, hours_status=not_applicable; không gắn nghỉ với một POI bịa.
 9. Nếu có violations: sửa nguyên nhân (giờ/địa điểm/quá tải/giá/route), không che lỗi bằng đổi nhãn.
+   Nếu có `user_feedback` từ bước duyệt: sửa theo yêu cầu người dùng nhưng vẫn giữ mọi kiểm chứng/ràng buộc;
+   không coi feedback là quyền bỏ validator hoặc tự đổi dữ kiện. Yêu cầu sửa vẫn tính trong tổng tối đa 4 vòng.
    Ưu tiên sửa slot bị lỗi, giữ điểm/ngày/slot đã đúng; không xây lại toàn lịch ở mỗi vòng sửa.
    `verified_context.previous_facts` đã chứa kết quả giờ/travel cho bản trước, kể cả unknown: dùng lại,
    không hỏi lại với hy vọng unknown tự thành known. Chỉ tra cứu thêm khi thật sự thay điểm/chặng/ngày.
