@@ -6,7 +6,7 @@ lang: "en"
 title: "Complex of Huế Monuments (overview)"
 doc_type: "culture"
 is_fictional: 0
-translation_group: null
+translation_group: "tg-hue-quan-the-di-tich"
 source_title: "Complex of Huế Monuments – Wikipedia tiếng Anh"
 source_url: "https://en.wikipedia.org/wiki/Complex_of_Hu%E1%BA%BF_Monuments"
 license: "CC BY-SA 4.0"

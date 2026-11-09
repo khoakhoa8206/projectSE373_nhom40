@@ -6,7 +6,7 @@ lang: "vi"
 title: "Trang phục và ứng xử khi vào chùa, lăng tẩm, Đại Nội (Huế)"
 doc_type: "situation"
 is_fictional: 0
-translation_group: null
+translation_group: "tg-hue-ung-xu-chua-lang"
 source_title: "Nhóm tự viết"
 source_url: "team://tour-guide-agent/kb/hue-ung-xu-chua-lang-vi-01"
 license: "CC BY 4.0 (nhóm tự viết)"
