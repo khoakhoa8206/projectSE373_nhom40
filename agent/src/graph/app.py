@@ -34,11 +34,24 @@ class State(TypedDict, total=False):
 
 
 def default_tools():
-    # import muộn: tool do P2 (destination) và P4 (weather) viết; test truyền tool giả vào run_uc02
-    from agent.src.tools.destination import get_opening_hours, get_poi, get_travel_time, search_poi
+    # Import muộn: tool điểm đến của P2 và thời tiết của P4.
+    from agent.src.tools.destination import (
+        check_restricted_area,
+        get_opening_hours,
+        get_poi,
+        get_travel_time,
+        search_poi,
+    )
     from agent.src.tools.weather import get_weather_forecast
 
-    return [search_poi, get_poi, get_opening_hours, get_travel_time, get_weather_forecast]
+    return [
+        search_poi,
+        get_poi,
+        get_opening_hours,
+        get_travel_time,
+        check_restricted_area,
+        get_weather_forecast,
+    ]
 
 
 def traced(name, fn):

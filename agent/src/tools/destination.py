@@ -1,4 +1,4 @@
-"""Bốn tool chỉ đọc dữ liệu đã nạp; không mạng, không ghi DB, không đoán dữ kiện."""
+"""Tool đọc dữ liệu điểm đến và vùng hạn chế; không mạng, không ghi DB, không đoán dữ kiện."""
 
 from datetime import date as Date
 from typing import Literal
@@ -6,6 +6,7 @@ from typing import Literal
 from agent.db import repo
 from agent.schemas import POI
 from agent.src.tools.opening_hours import opening_intervals
+from agent.src.validation.facts import active, contains
 
 LEVELS = {"low": 0, "medium": 1, "high": 2}
 Mode = Literal["walk", "drive", "bike"]
@@ -117,3 +118,64 @@ def get_travel_time(from_poi_id: str, to_poi_id: str, mode: Mode) -> dict:
                   "source_url": "https://router.project-osrm.org/" if row["provider"] == "osrm" else
                   "https://openrouteservice.org/", "verified_at": row["computed_at"],
                   "attribution": "OpenStreetMap contributors"}
+
+
+def check_restricted_area(poi_id: str, date: str) -> dict:
+    """Kiểm điểm POI thuộc vùng hạn chế đã nạp, còn hiệu lực ngày YYYY-MM-DD.
+    POI không tồn tại trả not_found, inside=null. Không kiểm tuyến đường;
+    vùng quân sự OSM là policy tránh gợi ý, không phải xác nhận pháp lý.
+    """
+    _identifier(poi_id, "poi_id")
+    if not isinstance(date, str):
+        raise TypeError("date phải là chuỗi YYYY-MM-DD.")
+
+    try:
+        on_date = Date.fromisoformat(date)
+    except ValueError:
+        raise ValueError("date phải là ngày hợp lệ YYYY-MM-DD.") from None
+
+    if on_date.isoformat() != date:
+        raise ValueError("date phải đúng định dạng YYYY-MM-DD.")
+
+    result = {
+        "status": "ok",
+        "poi_id": poi_id,
+        "date": date,
+        "inside": None,
+        "zones": [],
+        "note": (
+            "Chỉ đối chiếu điểm POI với các vùng đã nạp vào DB, không kiểm tuyến đường. "
+            "Với vùng landuse=military theo OSM, đây là policy loại khỏi gợi ý, "
+            "không phải xác nhận pháp lý. Không nằm trong vùng không đồng nghĩa an toàn."
+        ),
+    }
+
+    rows = repo.query("SELECT * FROM pois WHERE poi_id = ?", (poi_id,))
+    if not rows:
+        result["status"] = "not_found"
+        return result
+
+    poi = _public(rows[0])
+    if poi is None:
+        raise ValueError("POI thiếu nguồn, giấy phép hoặc ngày xác minh.")
+
+    zones = repo.query(
+        "SELECT * FROM restricted_zones WHERE destination_id = ? ORDER BY zone_id",
+        (poi["destination_id"],),
+    )
+    matches = []
+    for zone in zones:
+        if not active(zone, date):
+            continue
+        if not all(isinstance(zone.get(key), str) and zone[key].strip()
+                   for key in ("source_url", "license", "verified_at")):
+            raise ValueError(f"Vùng {zone['zone_id']} thiếu metadata nguồn.")
+        if contains(zone["geometry"], poi["lon"], poi["lat"]):
+            matches.append({
+                key: zone[key]
+                for key in ("zone_id", "name", "source_url", "license", "verified_at")
+            })
+
+    result["inside"] = bool(matches)
+    result["zones"] = matches
+    return result
