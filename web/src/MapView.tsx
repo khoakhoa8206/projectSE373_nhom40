@@ -6,6 +6,7 @@ import type { Coords } from "./location";
 const HUE: L.LatLngTuple = [16.4637, 107.5909];
 export const DAY_COLORS = ["#0f5f73", "#c2410c", "#7c3aed", "#15803d", "#be123c"];
 const POI_COLORS = { attraction: "#475569", food: "#b45309", lodging: "#0369a1" };
+const POI_LABELS = { attraction: "điểm tham quan", food: "ăn uống", lodging: "lưu trú" }; // loại POI không chỉ thể hiện bằng màu
 
 /** Nội dung popup dựng bằng textContent: activity do LLM sinh, không được chèn thành HTML. */
 function popup(s: Slot): HTMLElement {
@@ -43,7 +44,7 @@ export default function MapView({ slots, pois, here }: { slots: Slot[]; pois: Po
     group.clearLayers();
     pois.forEach((p) => {
       const name = document.createElement("span");
-      name.textContent = p.name_vi; // dữ liệu từ DB, không chèn thành HTML
+      name.textContent = `${p.name_vi} · ${POI_LABELS[p.category]}`; // dữ liệu từ DB, không chèn thành HTML
       const color = POI_COLORS[p.category];
       L.circleMarker([p.lat, p.lon], { radius: 5, color, weight: 1, fillOpacity: 0.7 }).bindTooltip(name).addTo(group);
     });

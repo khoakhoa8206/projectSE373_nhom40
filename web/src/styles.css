@@ -72,6 +72,7 @@ legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 .error { background: var(--err-bg); color: var(--err); padding: 10px 12px; border-radius: 8px; }
+.offline { background: var(--warn-bg); color: var(--warn); padding: 8px 12px; margin: 0; font-weight: 600; }
 
 .violations { background: var(--warn-bg); padding: 8px 8px 8px 28px; border-radius: 8px; margin: 0 0 12px; }
 .day { margin-top: 14px; }
