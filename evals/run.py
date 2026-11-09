@@ -59,6 +59,18 @@ def run_case(case, template, out, scorer):
         with closing(repo.get_conn()) as conn:
             conn.executescript(Path(case["fixture"]).read_text(encoding="utf-8"))
 
+    plugin = getattr(scorer, "run_case", None)
+    if callable(plugin):
+        run_id = plugin(case)
+        with closing(repo.get_conn()) as conn:
+            score = scorer.score(case, conn, run_id)
+        run = repo.query(
+            "SELECT tokens_in + tokens_out AS tokens, cost_usd AS cost, latency_ms, status FROM runs WHERE run_id=?",
+            (run_id,),
+        )[0]
+        return {"case_id": case["case_id"], "run_id": run_id, "passed": bool(score["passed"]),
+                "reasons": list(score["reasons"]), "metrics": score.get("metrics", {}), **run}
+
     mock = start_mock(case.get("weather_mode", "normal"))
     try:
         trip_id = repo.create_trip(EVAL_USER)
@@ -87,7 +99,7 @@ def main():
     lines = (Path("evals") / uc_dir / "cases.jsonl").read_text(encoding="utf-8").splitlines()
     cases = [json.loads(line) for line in lines if line.strip()]
     scorer = importlib.import_module(f"evals.{uc_dir}.scorer")
-    if port_open(MOCK_PORT):
+    if uc_dir == "uc02" and port_open(MOCK_PORT):
         sys.exit(f"Cổng {MOCK_PORT} đang bận: tắt mock-weather đang chạy (make dev) rồi chạy lại.")
 
     out = Path("results") / f"{uc_dir}-{datetime.now():%Y%m%d-%H%M%S}"

@@ -1,0 +1,439 @@
+[
+  {
+    "case_id": "I01",
+    "run_id": "r-981ed730",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 6,
+      "hard_total": 6,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1738,
+    "latency_ms": 13492
+  },
+  {
+    "case_id": "I02",
+    "run_id": "r-40364855",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1740,
+    "latency_ms": 3602
+  },
+  {
+    "case_id": "I03",
+    "run_id": "r-624bcdc3",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1676,
+    "latency_ms": 3258
+  },
+  {
+    "case_id": "I04",
+    "run_id": "r-767a147f",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1709,
+    "latency_ms": 7844
+  },
+  {
+    "case_id": "I05",
+    "run_id": "r-21f09044",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1686,
+    "latency_ms": 1938
+  },
+  {
+    "case_id": "I06",
+    "run_id": "r-be18b8d4",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": true,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1754,
+    "latency_ms": 7903
+  },
+  {
+    "case_id": "I07",
+    "run_id": "r-8e3a5e3d",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 0,
+      "hard_total": 0,
+      "hard_accuracy": null,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": true,
+      "unsupported_correct": true
+    },
+    "status": "succeeded",
+    "tokens": 1670,
+    "latency_ms": 5221
+  },
+  {
+    "case_id": "I08",
+    "run_id": "r-236dfa57",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 0,
+      "hard_total": 0,
+      "hard_accuracy": null,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": true,
+      "unsupported_correct": true
+    },
+    "status": "succeeded",
+    "tokens": 1681,
+    "latency_ms": 4375
+  },
+  {
+    "case_id": "I09",
+    "run_id": "r-47a45440",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 6,
+      "hard_total": 6,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1759,
+    "latency_ms": 4678
+  },
+  {
+    "case_id": "I10",
+    "run_id": "r-87d707e8",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1704,
+    "latency_ms": 5304
+  },
+  {
+    "case_id": "I11",
+    "run_id": "r-843a0282",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": true,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1742,
+    "latency_ms": 2874
+  },
+  {
+    "case_id": "I12",
+    "run_id": "r-05dfba5c",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 6,
+      "hard_total": 6,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1754,
+    "latency_ms": 4222
+  },
+  {
+    "case_id": "I13",
+    "run_id": "r-a7c667d6",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": true,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1714,
+    "latency_ms": 4812
+  },
+  {
+    "case_id": "I14",
+    "run_id": "r-2606c2fd",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1714,
+    "latency_ms": 5420
+  },
+  {
+    "case_id": "I15",
+    "run_id": "r-c1f368ed",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1709,
+    "latency_ms": 4411
+  },
+  {
+    "case_id": "I16",
+    "run_id": "r-24561ed3",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1700,
+    "latency_ms": 5461
+  },
+  {
+    "case_id": "I17",
+    "run_id": "r-cef6b7fa",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 3,
+      "hard_total": 3,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1686,
+    "latency_ms": 5122
+  },
+  {
+    "case_id": "I18",
+    "run_id": "r-18625f6b",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1690,
+    "latency_ms": 5299
+  },
+  {
+    "case_id": "I19",
+    "run_id": "r-cffd06d2",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 2,
+      "hard_total": 2,
+      "hard_accuracy": 1.0,
+      "conflict_expected": true,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1718,
+    "latency_ms": 4451
+  },
+  {
+    "case_id": "I20",
+    "run_id": "r-845f9f49",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1699,
+    "latency_ms": 6665
+  },
+  {
+    "case_id": "I21",
+    "run_id": "r-01a6a756",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 0,
+      "hard_total": 0,
+      "hard_accuracy": null,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": true,
+      "unsupported_correct": true
+    },
+    "status": "succeeded",
+    "tokens": 1701,
+    "latency_ms": 3308
+  },
+  {
+    "case_id": "I22",
+    "run_id": "r-20919fff",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 3488,
+    "latency_ms": 16477
+  },
+  {
+    "case_id": "I23",
+    "run_id": "r-69105a04",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": true,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 3524,
+    "latency_ms": 8669
+  }
+]
