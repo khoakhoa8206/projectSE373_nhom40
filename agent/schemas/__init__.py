@@ -2,12 +2,12 @@
 Đổi model = mở PR nhãn `contract` và tăng SCHEMA_VERSION."""
 
 import json
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = "0.1"
+SCHEMA_VERSION = "0.2"  # 0.2: thêm TripEvent (UC-09)
 
 HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
 
@@ -112,3 +112,38 @@ class Violation(BaseModel):
     severity: Literal["low", "medium", "high"]
     slot_id: str | None = None  # None = vi phạm cấp ngày/chuyến (vd ngân sách)
     message: str
+
+
+COORD_KEYS = {"lat", "lon", "lng", "latitude", "longitude", "gps", "geo", "coords", "coordinates"}
+
+
+class TripEvent(BaseModel):
+    """1 dòng bảng trip_events (UC-09). Vị trí chỉ ở mức poi_id: không nhận lat/lon, kể cả trong payload."""
+
+    model_config = ConfigDict(extra="forbid")
+    event_id: str | None = None  # app sinh để gửi lại không bị trùng; thiếu thì code sinh
+    trip_id: str | None = None  # API lấy từ URL, không tin body
+    occurred_at: datetime
+    day_index: int = Field(ge=0, le=5)  # 0 = trước ngày khởi hành (vd đặt phòng), chỉ tính vào tổng chuyến
+    event_type: Literal["slot_done", "slot_skipped", "note", "photo_meta", "expense", "adjustment"]
+    slot_id: str | None = None
+    poi_id: str | None = None
+    amount_vnd: int | None = Field(None, ge=0)
+    payload: dict = {}  # ghi chú, metadata ảnh (không GPS), nhóm chi tiêu…
+    created_by: Literal["user", "system"] = "user"
+
+    @model_validator(mode="after")
+    def _consistent(self):
+        if (self.event_type == "expense") != (self.amount_vnd is not None):
+            raise ValueError("amount_vnd bắt buộc với expense và chỉ dùng cho expense")
+        if self.event_type in ("slot_done", "slot_skipped") and not (self.slot_id or self.poi_id):
+            raise ValueError("slot_done/slot_skipped cần slot_id hoặc poi_id")
+
+        def has_coords(x):
+            if isinstance(x, dict):
+                return any(str(k).lower() in COORD_KEYS or has_coords(v) for k, v in x.items())
+            return isinstance(x, list) and any(has_coords(v) for v in x)
+
+        if has_coords(self.payload):
+            raise ValueError("payload không được chứa toạ độ; vị trí chỉ ghi bằng poi_id")
+        return self

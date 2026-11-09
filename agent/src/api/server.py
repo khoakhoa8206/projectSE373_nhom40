@@ -4,6 +4,7 @@ Người dùng lấy từ session cookie (POST /api/session), không bao giờ t
 import json
 import os
 import secrets
+import sqlite3
 import threading
 from typing import Any, Literal
 
@@ -15,10 +16,11 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from agent.db import repo
 from agent.db.init import FICTIONAL_USERS
-from agent.schemas import TripProfile
+from agent.schemas import TripEvent, TripProfile
 from agent.src.api.stream import run_events
 from agent.src.graph import app as graph
 from agent.src.memory import store
+from agent.src.nodes.journal import run_uc09
 from agent.src.nodes.narrate import run_uc03
 
 load_dotenv()
@@ -67,6 +69,15 @@ class NarrateIn(BaseModel):
     question: str | None = Field(None, max_length=500)
     lang: Literal["vi", "en"]
     length: Literal["short", "detail"] = "short"
+
+
+class JournalIn(BaseModel):
+    """Body UC-09: nhật ký 1 ngày (scope = day, cần day_index) hoặc tóm tắt cả chuyến (scope = trip)."""
+
+    model_config = ConfigDict(extra="forbid")
+    scope: Literal["day", "trip"]
+    day_index: int | None = Field(None, ge=0, le=5)
+    lang: Literal["vi", "en"] = "vi"
 
 
 @app.get("/api/users")
@@ -251,3 +262,44 @@ def narrate(body: NarrateIn, user_id: str = Depends(current_user)):
     if result["error"]:
         raise HTTPException(500, result)
     return {k: result[k] for k in ("text", "citations", "out_of_kb", "run_id")}
+
+
+@app.get("/api/trips")
+def list_trips(user_id: str = Depends(current_user)):
+    """Chuyến đi của người dùng (mới nhất trước) kèm ngày đi/về của hồ sơ mới nhất, cho màn hình Nhật ký."""
+    return repo.query(
+        """SELECT t.trip_id, t.status, t.created_at, p.start_date, p.end_date FROM trips t
+           LEFT JOIN trip_profiles p
+             ON p.profile_id = (SELECT MAX(profile_id) FROM trip_profiles WHERE trip_id = t.trip_id)
+           WHERE t.user_id = ? ORDER BY t.created_at DESC, t.rowid DESC""",
+        (user_id,),
+    )
+
+
+@app.post("/api/trips/{trip_id}/events")
+def add_trip_event(trip_id: str, event: TripEvent, user_id: str = Depends(current_user)):
+    """UC-09 (P3): ghi 1 sự kiện chuyến đi. trip_id lấy từ URL; vị trí chỉ là poi_id (gửi toạ độ → 422)."""
+    own_trip(trip_id, user_id)
+    try:
+        return {"event_id": repo.add_trip_event(event.model_copy(update={"trip_id": trip_id}))}
+    except (ValueError, sqlite3.IntegrityError) as e:  # poi_id/slot_id không tồn tại, event_id của chuyến khác
+        raise HTTPException(400, f"Không ghi được sự kiện: {e}") from e
+
+
+@app.get("/api/trips/{trip_id}/events")
+def list_trip_events(trip_id: str, day_index: int | None = None, user_id: str = Depends(current_user)):
+    own_trip(trip_id, user_id)
+    return repo.trip_events(trip_id, day_index)
+
+
+@app.post("/api/trips/{trip_id}/journal")
+def make_journal(trip_id: str, body: JournalIn, user_id: str = Depends(current_user)):
+    """UC-09 (P3): nhật ký ngày / tóm tắt chuyến (nén theo tầng). Trả nội dung, event_ids, total_spent_vnd (tool
+    sum_expenses), tokens_before → tokens_after, run_id. Lỗi → 500 kèm run_id."""
+    own_trip(trip_id, user_id)
+    if (body.scope == "day") != (body.day_index is not None):
+        raise HTTPException(422, "scope = day cần day_index; scope = trip không gửi day_index")
+    result = run_uc09(trip_id, user_id, body.scope, body.day_index, body.lang)
+    if result["error"]:
+        raise HTTPException(500, result)
+    return result["journal"] | {"run_id": result["run_id"]}
