@@ -59,6 +59,21 @@
       }
     },
     "/api/trips": {
+      "get": {
+        "summary": "List Trips",
+        "description": "Chuyến đi của người dùng (mới nhất trước) kèm ngày đi/về của hồ sơ mới nhất, cho màn hình Nhật ký.",
+        "operationId": "list_trips_api_trips_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
       "post": {
         "summary": "Create Trip",
         "description": "Nhận form hồ sơ → tạo trip + trip_profiles v1 (route = plan).",
@@ -242,7 +257,7 @@
     "/api/trips/{trip_id}/messages": {
       "post": {
         "summary": "Post Message",
-        "description": "UC-01 hội thoại: lưu tin nhắn; đang có câu hỏi ask_user thì tin nhắn là câu trả lời (resume),\nkhông thì bắt đầu lượt UC-01 mới (graph UC-01 do P2 đăng ký vào GRAPHS).",
+        "description": "UC-01 hội thoại, chạy nền: trả {run_id} ngay, theo dõi bằng GET /api/runs/{run_id}/stream.\nĐang có câu hỏi ask_user thì tin nhắn là câu trả lời (resume); không thì bắt đầu lượt UC-01 mới.",
         "operationId": "post_message_api_trips__trip_id__messages_post",
         "parameters": [
           {
@@ -581,6 +596,190 @@
           }
         }
       }
+    },
+    "/api/narrate": {
+      "post": {
+        "summary": "Narrate",
+        "description": "UC-03 (P3): thuyết minh có trích dẫn [doc_id §section] theo ngôn ngữ người dùng. Kho không có thông tin →\nout_of_kb = true và câu mẫu. Lỗi → 500 kèm run_id để xem trace.",
+        "operationId": "narrate_api_narrate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NarrateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trips/{trip_id}/events": {
+      "post": {
+        "summary": "Add Trip Event",
+        "description": "UC-09 (P3): ghi 1 sự kiện chuyến đi. trip_id lấy từ URL; vị trí chỉ là poi_id (gửi toạ độ → 422).",
+        "operationId": "add_trip_event_api_trips__trip_id__events_post",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Trip Events",
+        "operationId": "list_trip_events_api_trips__trip_id__events_get",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          },
+          {
+            "name": "day_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day Index"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trips/{trip_id}/journal": {
+      "post": {
+        "summary": "Make Journal",
+        "description": "UC-09 (P3): nhật ký ngày / tóm tắt chuyến (nén theo tầng). Trả nội dung, event_ids, total_spent_vnd (tool\nsum_expenses), tokens_before → tokens_after, run_id. Lỗi → 500 kèm run_id.",
+        "operationId": "make_journal_api_trips__trip_id__journal_post",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JournalIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -613,6 +812,47 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "JournalIn": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "day",
+              "trip"
+            ],
+            "title": "Scope"
+          },
+          "day_index": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Index"
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "vi",
+              "en"
+            ],
+            "title": "Lang",
+            "default": "vi"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scope"
+        ],
+        "title": "JournalIn",
+        "description": "Body UC-09: nhật ký 1 ngày (scope = day, cần day_index) hoặc tóm tắt cả chuyến (scope = trip)."
+      },
       "MemoryIn": {
         "properties": {
           "value": {
@@ -640,6 +880,57 @@
           "text"
         ],
         "title": "MessageIn"
+      },
+      "NarrateIn": {
+        "properties": {
+          "poi_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poi Id"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "vi",
+              "en"
+            ],
+            "title": "Lang"
+          },
+          "length": {
+            "type": "string",
+            "enum": [
+              "short",
+              "detail"
+            ],
+            "title": "Length",
+            "default": "short"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lang"
+        ],
+        "title": "NarrateIn",
+        "description": "Body UC-03: poi_id (UI tự tìm POI gần nhất, không bao giờ gửi toạ độ) và/hoặc câu hỏi."
       },
       "ResumeIn": {
         "properties": {
@@ -679,6 +970,113 @@
           "user_id"
         ],
         "title": "SessionIn"
+      },
+      "TripEvent": {
+        "properties": {
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "trip_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trip Id"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "day_index": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Day Index"
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "slot_done",
+              "slot_skipped",
+              "note",
+              "photo_meta",
+              "expense",
+              "adjustment"
+            ],
+            "title": "Event Type"
+          },
+          "slot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Id"
+          },
+          "poi_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poi Id"
+          },
+          "amount_vnd": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Vnd"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload",
+            "default": {}
+          },
+          "created_by": {
+            "type": "string",
+            "enum": [
+              "user",
+              "system"
+            ],
+            "title": "Created By",
+            "default": "user"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "occurred_at",
+          "day_index",
+          "event_type"
+        ],
+        "title": "TripEvent",
+        "description": "1 dòng bảng trip_events (UC-09). Vị trí chỉ ở mức poi_id: không nhận lat/lon, kể cả trong payload."
       },
       "TripProfile": {
         "properties": {

@@ -16,6 +16,7 @@ from agent.db import repo
 from agent.schemas import Itinerary, TripProfile, Violation
 from agent.src.graph.checkpoint import config, open_checkpointer
 from agent.src.graph.loop import AgentLoopLimitError, make_client, ms
+from agent.src.nodes import intake as uc01
 from agent.src.nodes import memory
 from agent.src.nodes.plan import plan
 from agent.src.validation.validator import check_fabrication, validate
@@ -46,6 +47,7 @@ class State(TypedDict, total=False):
     user_feedback: str | None  # ghi chú khi người dùng chọn "sửa", plan dùng làm yêu cầu cho lượt mới
     user_id: str
     memory: list[dict]  # UC-07: sở thích người dùng đã đồng ý lưu từ chuyến trước, plan dùng để ưu tiên
+    intake: dict  # UC-01: {route, questions, conflicts, message} của lượt intake gần nhất
     approval_decision: str  # graph duyệt riêng của P2 (build_approval_graph)
     feedback: str
 
@@ -202,15 +204,35 @@ def remember(state):
     return {}
 
 
-def build_uc02(client, tools, usage):
-    g = StateGraph(State)
+def intake_node(state, client, usage):
+    """UC-01 (node intake của P2): hội thoại → TripProfile; thiếu/mâu thuẫn thì hỏi lại, ngoài Huế thì dừng."""
+    result = uc01.intake(state, client, usage)
+    out = {k: result[k] for k in ("route", "questions", "conflicts", "message")}
+    text = "\n".join(q["text"] for q in result["questions"]) if result["route"] == "ask_user" else result["message"]
+    if text:  # lưu câu agent nói để lượt intake sau có đủ ngữ cảnh hội thoại
+        repo.add_message(state["trip_id"], state["user_id"], "assistant", text, run_id=state["run_id"])
+    return {"intake": out}
+
+
+def ask_user(state):
+    """Dừng chờ người dùng trả lời các câu hỏi của intake; câu trả lời được lưu thành tin nhắn rồi intake chạy lại."""
+    asked = state["intake"]
+    answer = ask_human("ask_user", {"questions": asked["questions"], "conflicts": asked["conflicts"]})
+    reply = answer.get("response")
+    text = reply if isinstance(reply, str) else "; ".join(f"{k}: {v}" for k, v in (reply or {}).items())
+    if text.strip():
+        repo.add_message(state["trip_id"], state["user_id"], "user", text, run_id=state["run_id"])
+    return {}
+
+
+def add_planning(g, client, tools, usage):
+    """Các node UC-02 dùng chung cho graph UC-02 (form) và UC-01 (hội thoại rồi lập lịch)."""
     g.add_node("load_profile", traced("load_profile", load_profile))
     g.add_node("plan", traced("plan", lambda s: plan_or_keep_best(s, client, tools, usage)))
     g.add_node("validate", traced("validate", check))
     g.add_node("finalize", traced("finalize", finalize))
     g.add_node("approve", traced("approve", approve))
     g.add_node("remember", traced("remember", remember))
-    g.add_edge(START, "load_profile")
     g.add_edge("load_profile", "plan")
     g.add_conditional_edges("plan", lambda s: "finalize" if s.get("planning_stopped") else "validate")
     g.add_conditional_edges("validate", lambda s: "plan" if s["violations"] and s["round"] < MAX_ROUNDS else "finalize")
@@ -220,7 +242,23 @@ def build_uc02(client, tools, usage):
     return g
 
 
-GRAPHS = {"UC-02": build_uc02}  # runs.uc → hàm dựng graph; UC khác đăng ký thêm ở đây để continue/resume tìm đúng
+def build_uc02(client, tools, usage):
+    g = add_planning(StateGraph(State), client, tools, usage)
+    g.add_edge(START, "load_profile")
+    return g
+
+
+def build_uc01(client, tools, usage):
+    g = add_planning(StateGraph(State), client, tools, usage)
+    g.add_node("intake", traced("intake", lambda s: intake_node(s, client, usage)))
+    g.add_node("ask_user", traced("ask_user", ask_user))
+    g.add_edge(START, "intake")
+    g.add_conditional_edges("intake", lambda s: {"ask_user": "ask_user", "plan": "load_profile"}.get(s["intake"]["route"], END))
+    g.add_edge("ask_user", "intake")
+    return g
+
+
+GRAPHS = {"UC-01": build_uc01, "UC-02": build_uc02}  # runs.uc → hàm dựng graph; UC khác đăng ký thêm ở đây để continue/resume tìm đúng
 
 
 def drive(uc, run_id, trip_id, graph_input, client=None, tools=None):
@@ -241,6 +279,8 @@ def drive(uc, run_id, trip_id, graph_input, client=None, tools=None):
         with open_checkpointer() as saver:
             if isinstance(graph_input, dict):
                 saver.delete_thread(trip_id)  # lượt mới không được kế thừa best_* của lượt trước
+                repo.query("UPDATE approvals SET decision = 'rejected', decided_at = ? WHERE trip_id = ? AND decision = 'pending'",
+                           (repo.now(), trip_id))  # fmt: skip — yêu cầu chờ của lượt cũ không còn graph để chạy tiếp
             graph = GRAPHS[uc](client, tools, usage).compile(checkpointer=saver)
             try:
                 out = graph.invoke(graph_input, config(trip_id))
@@ -287,6 +327,13 @@ def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None, run_i
     run_id = run_id or repo.create_run("UC-02", trip_id, user_id, eval_case_id)
     state = {"run_id": run_id, "trip_id": trip_id, "itinerary_id": repo.new_id("it"), "approval": approval}
     return summarize(run_id, *drive("UC-02", run_id, trip_id, state, client, tools))
+
+
+def run_uc01(trip_id, user_id, client=None, tools=None, run_id=None):
+    """Lượt hội thoại UC-01 (tin nhắn đã lưu trong messages): intake → hỏi lại → lập lịch → duyệt → lưu bộ nhớ."""
+    run_id = run_id or repo.create_run("UC-01", trip_id, user_id)
+    state = {"run_id": run_id, "trip_id": trip_id, "user_id": user_id, "itinerary_id": repo.new_id("it"), "approval": True}
+    return summarize(run_id, *drive("UC-01", run_id, trip_id, state, client, tools))
 
 
 def claim(trip_id, approval_id, decision, response=None):

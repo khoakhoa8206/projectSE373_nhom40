@@ -116,7 +116,6 @@ export default function ProfilePage({ user, onExpired, ApprovalCard = ApprovalAd
       {error && <p className="error" role="alert">{error}</p>}
       {error && activeRun && <button disabled={busy} onClick={() => { setError(""); setActiveRun({ id: activeRun.id }); }}>Kết nối lại run</button>}
       {pending && <ApprovalCard key={pending.approval_id} request={pending} busy={busy} onAnswer={resume} />}
-      <p className="muted small">Clone này chưa có ApprovalCard P4: đang dùng adapter tạm P2, thay qua prop ApprovalCard khi tích hợp.</p>
     </section>
     {itinerary && <ItineraryPage itinerary={itinerary} />}
   </main>;

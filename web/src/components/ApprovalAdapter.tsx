@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import type { ApprovalCardProps } from "../api";
+import ApprovalCard from "./ApprovalCard";
 
-/** Điều khiển tạm P2; có thể thay bằng ApprovalCard P4 qua prop, không giả nhận component P4 đã có. */
+/** Thẻ hỏi lại / duyệt của trang hội thoại (P2). Lưu bộ nhớ (UC-07) dùng ApprovalCard chung của P4. */
 export default function ApprovalAdapter({ request, busy, onAnswer }: ApprovalCardProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState("");
@@ -11,6 +12,9 @@ export default function ApprovalAdapter({ request, busy, onAnswer }: ApprovalCar
     void onAnswer({ decision: "approved", response: answers });
   }
 
+  if (request.kind === "memory_save") {
+    return <ApprovalCard payload={request} busy={busy} onSubmit={(decision, response) => void onAnswer({ decision, response })} />;
+  }
   if (request.kind === "ask_user") {
     return (
       <form onSubmit={submit} className="approval">

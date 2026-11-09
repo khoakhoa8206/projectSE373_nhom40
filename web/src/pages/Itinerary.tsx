@@ -53,7 +53,7 @@ export default function ItineraryPage({ itinerary }: { itinerary: Itinerary }) {
       <h3>{slots[0]?.slot_date}</h3>
       <ul className="slots-list">{slots.map((slot) => <SlotRow key={slot.slot_id} slot={slot} />)}</ul>
     </div>
-    <MapView slots={itinerary.slots} />
+    <MapView slots={itinerary.slots} pois={[]} />
     <p className="muted small">Đường nối thứ tự tham quan, không phải đường đi thực tế.</p>
     <ul className="map-legend" aria-label="Chú giải màu bản đồ">
       {days.map((day) => <li key={day}><span className="dot" style={{ background: DAY_COLORS[(day - 1) % DAY_COLORS.length] }} />Ngày {day}</li>)}

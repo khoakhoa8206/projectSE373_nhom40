@@ -159,21 +159,20 @@ class MessageIn(BaseModel):
 
 @app.post("/api/trips/{trip_id}/messages")
 def post_message(trip_id: str, body: MessageIn, user_id: str = Depends(current_user)):
-    """UC-01 hội thoại: lưu tin nhắn; đang có câu hỏi ask_user thì tin nhắn là câu trả lời (resume),
-    không thì bắt đầu lượt UC-01 mới (graph UC-01 do P2 đăng ký vào GRAPHS)."""
+    """UC-01 hội thoại, chạy nền: trả {run_id} ngay, theo dõi bằng GET /api/runs/{run_id}/stream.
+    Đang có câu hỏi ask_user thì tin nhắn là câu trả lời (resume); không thì bắt đầu lượt UC-01 mới."""
     own_trip(trip_id, user_id)
-    repo.add_message(trip_id, user_id, "user", body.text)
     asking = [p for p in graph.pending_approvals(trip_id) if p["kind"] == "ask_user"]
     if asking:
-        result = graph.resume(trip_id, asking[0]["approval_id"], "approved", body.text)
-    elif "UC-01" in graph.GRAPHS:
-        run_id = repo.create_run("UC-01", trip_id, user_id)
-        result = graph.summarize(run_id, *graph.drive("UC-01", run_id, trip_id, {"run_id": run_id, "trip_id": trip_id}))
+        run_id = graph.claim(trip_id, asking[0]["approval_id"], "approved", body.text)
+        if run_id is None:
+            raise HTTPException(409, "Câu hỏi vừa được trả lời ở nơi khác, hãy tải lại")
+        start(graph.resume_claimed, run_id, trip_id, "approved", body.text)  # node ask_user lưu tin nhắn
     else:
-        raise HTTPException(501, "UC-01 hội thoại chưa được đăng ký (W8-P2-1)")
-    if result is None or result["error"]:
-        raise HTTPException(500, result)
-    return result
+        repo.add_message(trip_id, user_id, "user", body.text)
+        run_id = repo.create_run("UC-01", trip_id, user_id)
+        start(graph.run_uc01, trip_id, user_id, run_id=run_id)
+    return {"run_id": run_id, "status": "running"}
 
 
 @app.get("/api/trips/{trip_id}/itinerary")

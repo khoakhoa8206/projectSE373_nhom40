@@ -61,7 +61,8 @@ export type PlanResult = { run_id: string; itinerary_id: string | null; status: 
 export type Question = { field: string; text: string };
 export type ApprovalRequest =
   | { kind: "ask_user"; approval_id: string; data: { questions: Question[]; conflicts: string[] } }
-  | { kind: "itinerary_approval"; approval_id: string; data: { itinerary_id: string } };
+  | { kind: "itinerary_approval"; approval_id: string; data: { itinerary_id: string } }
+  | { kind: "memory_save"; approval_id: string; data: { items: MemoryItem[] } };
 export type ApprovalAnswer = { decision: "approved" | "rejected" | "edited"; response: unknown };
 export type ApprovalCardProps = {
   request: ApprovalRequest;
@@ -79,7 +80,7 @@ export function watchRun(runId: string, handlers: {
   source.addEventListener("interrupt", (event) => {
     try {
       const request = JSON.parse((event as MessageEvent).data) as ApprovalRequest;
-      if (!request.approval_id || !request.data || !["ask_user", "itinerary_approval"].includes(request.kind)) {
+      if (!request.approval_id || !request.data || !["ask_user", "itinerary_approval", "memory_save"].includes(request.kind)) {
         throw new Error("Interrupt sai cấu trúc hoặc kind chưa hỗ trợ.");
       }
       if (request.kind === "ask_user" && (!Array.isArray(request.data.questions) || request.data.questions.length > 3

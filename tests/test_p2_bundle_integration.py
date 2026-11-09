@@ -134,7 +134,9 @@ def test_api_three_days_with_real_tools(bundle, monkeypatch, condition):
     def respond(request):
         if condition == "timeout":
             raise httpx.ReadTimeout("test", request=request)
-        return httpx.Response(200, json={"condition": condition, "temp_min_c": 23, "temp_max_c": 29, "precip_mm": 10})
+        # forecast_date giống mock-weather thật: tool thời tiết v2 (P4) coi thiếu/lệch ngày là số liệu bất thường
+        return httpx.Response(200, json={"forecast_date": request.url.params["date"], "condition": condition,
+                                         "temp_min_c": 23, "temp_max_c": 29, "precip_mm": 10})
 
     monkeypatch.setattr(weather, "_client", lambda: httpx.Client(
         base_url="http://127.0.0.1:8081", transport=httpx.MockTransport(respond)))
