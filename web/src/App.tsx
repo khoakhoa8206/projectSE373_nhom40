@@ -9,6 +9,7 @@ import MapView, { DAY_COLORS } from "./MapView";
 import JournalPage from "./pages/Journal";
 import Memory from "./pages/Memory";
 import Narrate from "./pages/Narrate";
+import ProfilePage from "./pages/Profile";
 
 const USER_KEY = "tourguide.user";
 const NO_SLOTS: Slot[] = [];
@@ -42,17 +43,20 @@ function addDays(d: string, n: number) {
   return t.toISOString().slice(0, 10);
 }
 
-// Chuyển trang bằng state đơn giản (không dùng router): UC-02 lịch trình, UC-03 thuyết minh, UC-09 nhật ký, UC-07 bộ nhớ.
-type Page = "plan" | "narrate" | "journal" | "memory";
-const PAGES: [Page, string][] = [["plan", "Lịch trình"], ["narrate", "Thuyết minh"], ["journal", "Nhật ký"], ["memory", "Bộ nhớ"]];
+// Chuyển trang bằng state đơn giản (không dùng router): UC-01 hội thoại, UC-02 nhập nhanh + lịch trình,
+// UC-03 thuyết minh, UC-09 nhật ký, UC-07 bộ nhớ.
+type Page = "chat" | "plan" | "narrate" | "journal" | "memory";
+const PAGES: [Page, string][] = [
+  ["chat", "Hội thoại"], ["plan", "Nhập nhanh"], ["narrate", "Thuyết minh"], ["journal", "Nhật ký"], ["memory", "Bộ nhớ"],
+];
 
 export default function App() {
   const [user, setUser] = useState<User | null>(loadUser);
-  const [page, setPage] = useState<Page>("plan");
+  const [page, setPage] = useState<Page>("chat");
   const pick = (u: User | null) => {
     saveUser(u);
     setUser(u);
-    setPage("plan");
+    setPage("chat");
   };
   return (
     <div className="app">
@@ -79,6 +83,8 @@ export default function App() {
       <OfflineBanner />
       {!user ? (
         <UserPicker onPick={pick} />
+      ) : page === "chat" ? (
+        <ProfilePage key={user.user_id} user={user} onExpired={() => pick(null)} />
       ) : page === "memory" ? (
         <Memory onExpired={() => pick(null)} />
       ) : page === "narrate" ? (
@@ -86,7 +92,7 @@ export default function App() {
       ) : page === "journal" ? (
         <JournalPage user={user} onExpired={() => pick(null)} />
       ) : (
-        <PlanScreen user={user} onExpired={() => pick(null)} />
+        <PlanScreen key={user.user_id} user={user} onExpired={() => pick(null)} />
       )}
     </div>
   );
@@ -371,7 +377,7 @@ function ItineraryView({ it }: { it: Itinerary }) {
         {it.status === "validated" ? `Đã qua validator sau ${it.planner_rounds} vòng` : `Còn vi phạm sau ${it.planner_rounds} vòng`}
       </p>
       <p>
-        Tổng chi phí đã có giá: <b>{it.total_cost_vnd === null ? "Chưa có giá xác minh" : vnd(it.total_cost_vnd)}</b>
+        Tổng chi phí đã có giá: <b>{it.total_cost_vnd === null ? "Tổng chi phí chưa đầy đủ" : vnd(it.total_cost_vnd)}</b>
         {it.has_unpriced_item ? " + các mục chưa có giá" : ""}
       </p>
       <p className="hint">
@@ -424,8 +430,8 @@ function SlotItem({ s }: { s: Slot }) {
           {s.travel_minutes_from_prev != null && <span className="tag">{s.travel_minutes_from_prev} phút di chuyển</span>}
           {s.cost_source === "tool" && s.cost_vnd != null && <span className="tag">{vnd(s.cost_vnd)}</span>}
           {s.cost_source === "free" && <span className="tag">Miễn phí</span>}
-          {s.cost_source === "unverified" && <span className="tag warn">chưa có giá</span>}
-          {s.hours_status === "unverified" && <span className="tag warn">giờ mở cửa chưa xác minh</span>}
+          {s.cost_vnd === null && <span className="tag warn">Chưa có giá</span>}
+          {s.hours_status === "unverified" && <span className="tag warn">Giờ mở cửa chưa xác minh</span>}
           {s.hours_status === "verified" && <span className="tag ok">giờ mở cửa đã xác minh</span>}
         </div>
         {s.note && <div className="muted small">{s.note}</div>}

@@ -155,3 +155,23 @@ button.danger { color: var(--err); border-color: var(--err); }
   .tabs { order: 3; width: 100%; margin: 4px 0 0; }
   .stats { grid-template-columns: 1fr; }
 
+/* Phase 2: giữ nguyên form cũ, bổ sung màn hình chat và tab ngày. */
+textarea { width: 100%; min-height: 88px; padding: 10px; font: inherit; border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
+.page-tabs, .day-tabs, .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.page-tabs { padding: 0 16px; }
+.page-tabs button, .day-tabs button, .actions button { padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.page-tabs [aria-current], .day-tabs [aria-selected="true"] { outline: 2px solid var(--brand); }
+.day-tabs button { display: flex; align-items: center; gap: 8px; }
+.chat-page { max-width: 1100px; margin: auto; padding: 16px; display: grid; gap: 16px; }
+.chat-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+.chat-log { max-height: 50vh; overflow-y: auto; }
+.bubble { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border-radius: 12px; background: #eef2f3; }
+.bubble.user { background: #e0f2fe; margin-left: 20px; }
+.approval { margin-top: 16px; }
+.approval label { display: block; margin: 10px 0; }
+.slots-list { list-style: none; padding: 0; }
+.map-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 14px; padding: 0; }
+.map-legend li { display: flex; align-items: center; gap: 6px; }
+.phase2-itinerary { min-width: 0; }
+.phase2-itinerary .map { height: 45vh; }
+@media (max-width: 480px) { .chat-page { padding: 10px; } .top { align-items: flex-start; } }

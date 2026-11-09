@@ -58,6 +58,63 @@ export type MemoryList = { items: SavedMemory[]; sensitive_consent: boolean };
 
 export type PlanResult = { run_id: string; itinerary_id: string | null; status: string; error: string | null };
 
+export type Question = { field: string; text: string };
+export type ApprovalRequest =
+  | { kind: "ask_user"; approval_id: string; data: { questions: Question[]; conflicts: string[] } }
+  | { kind: "itinerary_approval"; approval_id: string; data: { itinerary_id: string } };
+export type ApprovalAnswer = { decision: "approved" | "rejected" | "edited"; response: unknown };
+export type ApprovalCardProps = {
+  request: ApprovalRequest;
+  busy: boolean;
+  onAnswer: (answer: ApprovalAnswer) => Promise<void>;
+};
+
+/** P1 trả SSE theo hợp đồng; mất kết nối là lỗi, không được suy ra run đã xong. */
+export function watchRun(runId: string, handlers: {
+  onInterrupt: (request: ApprovalRequest) => void;
+  onDone: (data: { message?: string; status?: string }) => void;
+  onError: (message: string) => void;
+}): () => void {
+  const source = new EventSource(`/api/runs/${encodeURIComponent(runId)}/stream`);
+  source.addEventListener("interrupt", (event) => {
+    try {
+      const request = JSON.parse((event as MessageEvent).data) as ApprovalRequest;
+      if (!request.approval_id || !request.data || !["ask_user", "itinerary_approval"].includes(request.kind)) {
+        throw new Error("Interrupt sai cấu trúc hoặc kind chưa hỗ trợ.");
+      }
+      if (request.kind === "ask_user" && (!Array.isArray(request.data.questions) || request.data.questions.length > 3
+        || !request.data.questions.every((q) => typeof q.field === "string" && typeof q.text === "string")
+        || !Array.isArray(request.data.conflicts) || !request.data.conflicts.every((item) => typeof item === "string"))) {
+        throw new Error("Câu hỏi phải có field/text và tối đa 3 câu.");
+      }
+      if (request.kind === "itinerary_approval" && typeof request.data.itinerary_id !== "string") {
+        throw new Error("Thiếu itinerary_id.");
+      }
+      handlers.onInterrupt(request);
+    } catch {
+      handlers.onError("Không đọc được interrupt từ backend.");
+    }
+    source.close();
+  });
+  source.addEventListener("done", (event) => {
+    try {
+      handlers.onDone(JSON.parse((event as MessageEvent).data));
+    } catch {
+      handlers.onError("Không đọc được trạng thái kết thúc.");
+    }
+    source.close();
+  });
+  source.addEventListener("error", (event) => {
+    let message = "Mất kết nối SSE. Chưa thể xác nhận run đã xong; hãy kết nối lại, không gửi lại yêu cầu lập lịch.";
+    if (event instanceof MessageEvent) {
+      try { message = JSON.parse(event.data).message ?? message; } catch { /* giữ lỗi mạng */ }
+    }
+    source.close();
+    handlers.onError(message);
+  });
+  return () => source.close();
+}
+
 export type TraceEvent = {
   seq: number;
   node: string;
