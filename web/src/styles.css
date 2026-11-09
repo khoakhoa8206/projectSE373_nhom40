@@ -106,3 +106,30 @@ legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
   .grid { grid-template-columns: 1fr; }
   .slot { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* --- Thuyết minh (UC-03) + Nhật ký (UC-09) · P3 W9-P3-4 --- */
+.tabs { display: flex; gap: 4px; margin-right: auto; margin-left: 12px; }
+.tabs button { background: transparent; color: #fff; border: 1px solid rgb(255 255 255 / 0.4); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.tabs button.active { background: #fff; color: var(--brand); font-weight: 600; }
+.page { display: grid; gap: 16px; padding: 16px; max-width: 860px; margin: 0 auto; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row select { width: auto; margin-top: 0; }
+.row button:not(.primary) { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; }
+.row button.primary { padding: 8px 14px; }
+.cite { font-size: 0.8rem; color: var(--brand); white-space: nowrap; }
+.notice { background: var(--warn-bg); color: var(--warn); padding: 12px; border-radius: 8px; margin: 0 0 8px; }
+.sources { padding-left: 20px; margin: 0; }
+.sources li { padding: 4px 0; }
+.events { list-style: none; padding: 0; margin: 0; }
+.events li { padding: 6px 0; border-top: 1px solid var(--line); font-size: 0.92rem; }
+.journal { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 4px; }
+.stats div { background: #eef6f8; border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
+.stats b { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .top { flex-wrap: wrap; }
+  .tabs { order: 3; width: 100%; margin: 4px 0 0; }
+  .stats { grid-template-columns: 1fr; }
+}
+
