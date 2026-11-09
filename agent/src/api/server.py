@@ -4,16 +4,19 @@ Người dùng lấy từ session cookie (POST /api/session), không bao giờ t
 import json
 import os
 import secrets
+import threading
 from typing import Any, Literal
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
 from agent.db import repo
 from agent.db.init import FICTIONAL_USERS
 from agent.schemas import TripProfile
+from agent.src.api.stream import run_events
 from agent.src.graph import app as graph
 
 load_dotenv()
@@ -34,6 +37,16 @@ def current_user(request: Request) -> str:
 def own_trip(trip_id, user_id):
     if not repo.query("SELECT 1 FROM trips WHERE trip_id = ? AND user_id = ?", (trip_id, user_id)):
         raise HTTPException(404, "Không tìm thấy chuyến đi")
+
+
+def own_run(run_id, user_id):
+    if not repo.query("SELECT 1 FROM runs WHERE run_id = ? AND user_id = ?", (run_id, user_id)):
+        raise HTTPException(404, "Không tìm thấy lượt chạy")
+
+
+def start(fn, *args, **kwargs):
+    """Chạy graph ở thread nền; mọi kết quả/lỗi đã nằm trong runs + trace_events, PWA đọc qua stream."""
+    threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True).start()
 
 
 def _parse(s):
@@ -69,11 +82,16 @@ def create_trip(profile: TripProfile, user_id: str = Depends(current_user)):
 
 
 @app.post("/api/trips/{trip_id}/plan")
-def plan_trip(trip_id: str, user_id: str = Depends(current_user)):
-    """Chạy graph UC-02 (đồng bộ, có thể mất 1–2 phút) tới bước người dùng duyệt: kết quả có `interrupt`
-    (kind = itinerary_approval) để gửi lại qua /resume. Lỗi → 500 kèm run_id để xem trace."""
+def plan_trip(trip_id: str, background: bool = False, user_id: str = Depends(current_user)):
+    """Chạy graph UC-02 tới bước người dùng duyệt: kết quả có `interrupt` (kind = itinerary_approval) để gửi lại
+    qua /resume. Mặc định đồng bộ (1–2 phút); `?background=true` trả ngay {run_id} để PWA mở
+    GET /api/runs/{run_id}/stream. Lỗi → 500 kèm run_id để xem trace."""
     own_trip(trip_id, user_id)
     repo.query("UPDATE trips SET status = 'planning', updated_at = ? WHERE trip_id = ?", (repo.now(), trip_id))
+    if background:
+        run_id = repo.create_run("UC-02", trip_id, user_id)
+        start(graph.run_uc02, trip_id, user_id, run_id=run_id, approval=True)
+        return {"run_id": run_id, "status": "running"}
     result = graph.run_uc02(trip_id, user_id, approval=True)
     if result["error"]:
         raise HTTPException(500, result)
@@ -94,9 +112,16 @@ class ResumeIn(BaseModel):
 
 
 @app.post("/api/trips/{trip_id}/resume")
-def resume_trip(trip_id: str, body: ResumeIn, user_id: str = Depends(current_user)):
-    """Trả lời 1 interrupt → graph chạy tiếp đúng chỗ dừng (đọc checkpoint, backend restart vẫn được)."""
+def resume_trip(trip_id: str, body: ResumeIn, background: bool = False, user_id: str = Depends(current_user)):
+    """Trả lời 1 interrupt → graph chạy tiếp đúng chỗ dừng (đọc checkpoint, backend restart vẫn được).
+    `?background=true`: trả ngay {run_id}, theo dõi bằng stream."""
     own_trip(trip_id, user_id)
+    if background:
+        run_id = graph.claim(trip_id, body.approval_id, body.decision, body.response)
+        if run_id is None:
+            raise HTTPException(409, "Không có yêu cầu đang chờ với approval_id này (đã trả lời hoặc sai chuyến đi)")
+        start(graph.resume_claimed, run_id, trip_id, body.decision, body.response)
+        return {"run_id": run_id, "status": "running"}
     result = graph.resume(trip_id, body.approval_id, body.decision, body.response)
     if result is None:
         raise HTTPException(409, "Không có yêu cầu đang chờ với approval_id này (đã trả lời hoặc sai chuyến đi)")
@@ -138,11 +163,18 @@ def get_itinerary(trip_id: str, user_id: str = Depends(current_user)):
     return itinerary
 
 
+@app.get("/api/runs/{run_id}/stream")
+def stream_run(run_id: str, request: Request, after: int = 0, user_id: str = Depends(current_user)):
+    """SSE các bước của 1 lượt chạy (event = kind trong trace, rồi interrupt / done). Xem agent/src/api/stream.py."""
+    own_run(run_id, user_id)
+    return StreamingResponse(run_events(run_id, after, request.is_disconnected), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})  # fmt: skip
+
+
 @app.get("/api/runs/{run_id}/trace")
 def get_trace(run_id: str, user_id: str = Depends(current_user)):
     """Các bước của 1 lượt chạy (node, tool, skill, LLM) cho panel log."""
-    if not repo.query("SELECT 1 FROM runs WHERE run_id = ? AND user_id = ?", (run_id, user_id)):
-        raise HTTPException(404, "Không tìm thấy lượt chạy")
+    own_run(run_id, user_id)
     rows = repo.query("SELECT * FROM trace_events WHERE run_id = ? ORDER BY seq", (run_id,))
     return [r | {"args": _parse(r["args"]), "result": _parse(r["result"])} for r in rows]
 
