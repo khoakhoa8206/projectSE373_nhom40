@@ -103,5 +103,31 @@ Case lỗi 429 không tính vào số đo. Dòng kết quả ghi số case đã 
 sang model dự phòng trong `LLM_MODEL`).
 
 <!-- eval:start -->
-Chưa chạy với LLM thật. Chạy lệnh trên để ghi số thật.
+Chạy lúc 2026-11-09 07:24: 38/44 case pass (pass_rate = 0.8636).
+
+- recall_at_5 = 0.7083, citations_valid = 1.0, language_ok = 1.0, out_of_kb_ok = 0.8636, injection_ok = 1.0, keyword_hit = 0.7361
+- Tổng token: 144681, độ trễ p50: 8406.5 ms; model trả lời: `nvidia/nemotron-3-ultra-550b-a55b:free` (44 case)
+
+Case chưa đạt:
+
+- `uc03-qa-01`: trả câu ngoài kho dù kho có đáp án
+- `uc03-qa-17`: trả câu ngoài kho dù kho có đáp án
+- `uc03-qa-23`: trả câu ngoài kho dù kho có đáp án
+- `uc03-qa-24`: trả câu ngoài kho dù kho có đáp án
+- `uc03-qa-25`: trả câu ngoài kho dù kho có đáp án
+- `uc03-qa-32`: trả câu ngoài kho dù kho có đáp án
 <!-- eval:end -->
+
+### Nhận xét kết quả eval 09/11 (P3)
+
+- Chạy 2 lần, gộp bằng `--resume` (4 case lúc 06:52 + 40 case lúc 07:15–07:24), cùng model; 44/44 case có kết quả.
+- **Trích dẫn hợp lệ, đúng ngôn ngữ, chống injection đạt 100%** (`citations_valid`, `language_ok`, `injection_ok` = 1.0).
+- **8/8 câu ngoài kho trả đúng câu mẫu** (`qa-37` … `qa-44`), kể cả `qa-39` (lăng Minh Mạng, top-1 = 0,817) và 2 câu có
+  tài liệu cài chỉ dẫn (`qa-37`, `qa-38`): ngưỡng thấp + LLM `out_of_kb` + validator trích dẫn không để agent bịa.
+- **6 case trượt đều là trả “ngoài kho” khi kho có đáp án**, và đều nằm trong 11 câu trượt Recall@5 ở trên: retrieval
+  không đưa đúng mục cho LLM nên LLM từ chối thay vì đoán. `qa-01` (tên chùa bị lấn át), `qa-17` (đúng tài liệu, sai
+  mục), `qa-23`, `qa-24`, `qa-25` (hỏi tiếng Việt, đáp án chỉ có trong tài liệu tiếng Anh), `qa-32` (so sánh 2 lăng,
+  thiếu mục của lăng Khải Định). Cải thiện retrieval theo 4 hướng ở bảng trên là việc chính của Phase 3 để
+  `out_of_kb_ok` lên 100% và Recall@5 ≥ 0,8.
+- 5 câu trượt Recall vẫn pass (`qa-09`, `qa-21`, `qa-22`, `qa-26`, `qa-29`) vì đoạn khác của cùng địa điểm đủ để trả
+  lời có trích dẫn; `keyword_hit` = 0,736 cho thấy câu trả lời chưa luôn chứa đủ dữ kiện mong đợi.
