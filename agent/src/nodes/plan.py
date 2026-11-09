@@ -42,7 +42,10 @@ travel_minutes_from_prev phải khớp chặng từ POI trước đó CÙNG NGÀ
 Để đủ gap, start hiện tại >= end slot ngay trước + travel, kể cả sau slot nghỉ; slot nghỉ travel=null.
 Nếu không đủ thời gian/dữ liệu, giảm điểm hoặc ghi chưa đáp ứng, không gọi tool nối tiếp mãi để hoàn thiện mọi thứ.
 9. user_feedback (nếu có) là yêu cầu sửa của người dùng cho previous_itinerary: làm theo trong giới hạn hồ sơ,
-dữ liệu và các quy tắc trên; không làm được thì giữ bản bảo thủ và ghi rõ lý do trong note."""
+dữ liệu và các quy tắc trên; không làm được thì giữ bản bảo thủ và ghi rõ lý do trong note.
+10. user_memory là sở thích người dùng đã đồng ý lưu từ chuyến trước (dị ứng, ăn kiêng, nhịp đi, sở thích):
+dùng để ưu tiên và tránh món/điểm không hợp; hồ sơ chuyến này luôn thắng khi mâu thuẫn. Không nhắc lại mục nhạy cảm
+trong note nếu không cần."""
 
 
 def previous_facts(state, by_name):
@@ -144,6 +147,7 @@ def plan(state, client, tools, usage):
             "previous_itinerary": previous and [s.model_dump(mode="json") for s in previous.slots],
             "violations_to_fix": [v.model_dump() for v in state["violations"]],
             "user_feedback": state.get("user_feedback"),
+            "user_memory": state.get("memory") or [],
             "verified_context": context,
         },
         ensure_ascii=False,

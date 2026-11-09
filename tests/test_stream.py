@@ -50,8 +50,9 @@ def test_background_plan_streams_nodes_then_interrupt_then_done(client):
 
     body = {"approval_id": events[-2][1]["approval_id"], "decision": "approved"}
     assert client.post(f"/api/trips/{trip_id}/resume?background=true", json=body).json()["run_id"] == started["run_id"]
-    tail = read_sse(client, started["run_id"])  # stream lại cùng run: phát lại trace, giờ kết thúc ở succeeded
-    assert tail[-1] == ("done", {"run_id": started["run_id"], "status": "succeeded"})
+    tail = read_sse(client, started["run_id"])  # stream lại cùng run: phát lại trace, giờ dừng ở bước lưu bộ nhớ
+    assert tail[-2][0] == "interrupt" and tail[-2][1]["kind"] == "memory_save"
+    assert tail[-1] == ("done", {"run_id": started["run_id"], "status": "interrupted"})
     assert client.post(f"/api/trips/{trip_id}/resume?background=true", json=body).status_code == 409
 
 

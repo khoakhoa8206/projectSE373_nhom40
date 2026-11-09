@@ -25,7 +25,9 @@ def test_plan_stops_for_approval_then_resumes_without_replanning(db):
 
     llm = CountingLLM()  # backend restart: client/graph/kết nối checkpoint tạo mới
     done = app.resume(trip_id, payload["approval_id"], "approved", client=llm, tools=TOOLS)
-    assert llm.calls == 0 and done["status"] == "approved" and done["interrupt"] is None
+    assert llm.calls == 0 and done["status"] == "approved"
+    assert done["interrupt"]["kind"] == "memory_save"  # UC-07: duyệt xong thì hỏi có lưu sở thích không
+    assert app.resume(trip_id, done["interrupt"]["approval_id"], "rejected", client=llm, tools=TOOLS)["interrupt"] is None
     assert run_status(res["run_id"]) == "succeeded"
     assert repo.query("SELECT status FROM itineraries WHERE itinerary_id = ?", (res["itinerary_id"],)) == [
         {"status": "approved"}]
@@ -34,7 +36,7 @@ def test_plan_stops_for_approval_then_resumes_without_replanning(db):
     assert row["decision"] == "approved" and row["decided_at"]
     assert app.resume(trip_id, payload["approval_id"], "approved", client=llm, tools=TOOLS) is None  # bấm lần 2
     approvals = repo.query("SELECT name FROM trace_events WHERE run_id = ? AND kind = 'approval'", (res["run_id"],))
-    assert len(approvals) == 2  # lúc dừng + lúc người dùng trả lời
+    assert len(approvals) == 4  # 2 lần dừng (duyệt lịch trình, lưu bộ nhớ) × (lúc dừng + lúc người dùng trả lời)
 
 
 def test_edited_replans_with_user_feedback(db):
@@ -98,5 +100,5 @@ def test_api_resume_flow_and_ownership(db, monkeypatch):
     done = c.post(f"/api/trips/{trip_id}/resume", json=body).json()
     assert done["status"] == "approved"
     assert c.post(f"/api/trips/{trip_id}/resume", json=body).status_code == 409
-    assert c.get(f"/api/trips/{trip_id}/approvals").json() == []
+    assert c.get(f"/api/trips/{trip_id}/approvals").json() == [done["interrupt"]]  # còn bước lưu bộ nhớ
     assert c.post(f"/api/trips/{trip_id}/messages", json={"text": "xin chào"}).status_code == 501  # UC-01 chưa đăng ký
