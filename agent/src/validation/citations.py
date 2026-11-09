@@ -10,11 +10,12 @@ import unicodedata
 from agent.db import repo
 
 MIN_QUOTE_CHARS = 4  # quote quá ngắn (vd 1–2 ký tự) nằm trong mọi đoạn nên không chứng minh được gì
+QUOTES = str.maketrans({"“": '"', "”": '"', "„": '"', "‘": "'", "’": "'"})
 
 
 def normalize(text) -> str:
-    """Chuẩn hoá để so khớp: Unicode NFC, bỏ dấu nhấn markdown (* `), gộp mọi khoảng trắng thành 1 dấu cách."""
-    text = unicodedata.normalize("NFC", text or "").replace("*", "").replace("`", "")
+    """Chuẩn hoá để so khớp: Unicode NFC, ngoặc kép cong → thẳng, bỏ dấu nhấn markdown (* `), gộp khoảng trắng."""
+    text = unicodedata.normalize("NFC", text or "").translate(QUOTES).replace("*", "").replace("`", "")
     return re.sub(r"\s+", " ", text).strip()
 
 

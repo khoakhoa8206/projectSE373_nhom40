@@ -10,7 +10,7 @@ from typing import Any, Literal
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.sessions import SessionMiddleware
 
 from agent.db import repo
@@ -19,6 +19,7 @@ from agent.schemas import TripProfile
 from agent.src.api.stream import run_events
 from agent.src.graph import app as graph
 from agent.src.memory import store
+from agent.src.nodes.narrate import run_uc03
 
 load_dotenv()
 USERS = {user_id: (name, lang) for user_id, name, lang in FICTIONAL_USERS}
@@ -56,6 +57,16 @@ def _parse(s):
 
 class SessionIn(BaseModel):
     user_id: str
+
+
+class NarrateIn(BaseModel):
+    """Body UC-03: poi_id (UI tự tìm POI gần nhất, không bao giờ gửi toạ độ) và/hoặc câu hỏi."""
+
+    model_config = ConfigDict(extra="forbid")  # gửi kèm lat/lon → 422, không lưu vị trí chính xác
+    poi_id: str | None = None
+    question: str | None = Field(None, max_length=500)
+    lang: Literal["vi", "en"]
+    length: Literal["short", "detail"] = "short"
 
 
 @app.get("/api/users")
@@ -223,3 +234,20 @@ def list_pois(destination_id: str = "hue", category: str | None = None):
         (destination_id, category, category),
     )
     return [r | {"tags": _parse(r["tags"])} for r in rows]
+
+
+@app.post("/api/narrate")
+def narrate(body: NarrateIn, user_id: str = Depends(current_user)):
+    """UC-03 (P3): thuyết minh có trích dẫn [doc_id §section] theo ngôn ngữ người dùng. Kho không có thông tin →
+    out_of_kb = true và câu mẫu. Lỗi → 500 kèm run_id để xem trace."""
+    question = (body.question or "").strip() or None
+    if not question and not body.poi_id:
+        raise HTTPException(422, "Cần poi_id hoặc question")
+    if body.poi_id and not repo.query("SELECT 1 FROM pois WHERE poi_id = ?", (body.poi_id,)):
+        raise HTTPException(404, "Không tìm thấy POI")
+    name, lang = USERS[user_id]
+    repo.create_user(name, lang, user_id)  # có sẵn sau make db; tạo lại nếu DB mới
+    result = run_uc03(user_id, question, body.poi_id, body.lang, body.length)
+    if result["error"]:
+        raise HTTPException(500, result)
+    return {k: result[k] for k in ("text", "citations", "out_of_kb", "run_id")}
