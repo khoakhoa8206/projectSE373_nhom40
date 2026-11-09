@@ -145,11 +145,20 @@ def test_api_three_days_with_real_tools(bundle, monkeypatch, condition):
                "budget_total_vnd": 1000000, "pace": "relaxed", "interests": ["history"]}
     trip_id = client.post("/api/trips", json=profile).json()["trip_id"]
     result = client.post(f"/api/trips/{trip_id}/plan").json()
-    assert result["status"] == "validated" and result["error"] is None
+    expected_status = "failed_validation" if condition == "heavy_rain" else "validated"
+    assert result["status"] == expected_status and result["error"] is None
     itinerary = client.get(f"/api/trips/{trip_id}/itinerary").json()
     assert len(itinerary["slots"]) == 3 and itinerary["has_unpriced_item"] == 1
     # code điền giá từ dữ liệu (Đại Nội 200k + lăng Tự Đức 150k), Thiên Mụ chưa có giá -> has_unpriced_item
     assert itinerary["total_cost_vnd"] == 350000
+    if condition == "heavy_rain":
+        # Fake luôn nộp lại Thiên Mụ ven sông; chính vụ + mưa lớn phải giữ lỗi, không báo thành công.
+        assert itinerary["planner_rounds"] == 4
+        riverside = next(s for s in itinerary["slots"] if s["poi_id"] == "hue-chua-thien-mu")
+        assert any(v["rule"] == "weather" and v["slot_id"] == riverside["slot_id"]
+                   for v in itinerary["violations"])
+    else:
+        assert itinerary["violations"] == []
     if condition == "timeout":
         assert all("không có dự báo" in s["note"] for s in itinerary["slots"])
     events = repo.query("SELECT name FROM trace_events WHERE run_id=? AND kind='tool_call'", (result["run_id"],))

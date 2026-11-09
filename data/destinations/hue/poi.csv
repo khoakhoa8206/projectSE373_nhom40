@@ -1,5 +1,5 @@
 poi_id,destination_id,name_vi,name_en,category,lat,lon,opening_hours,ticket_price_vnd,avg_visit_minutes,is_outdoor,min_age,walking_level,tags,source_url,license,verified_at
-hue-chua-thien-mu,hue,Chùa Thiên Mụ,Thien Mu Pagoda,attraction,16.45355,107.54461,,,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#See,CC-BY-SA-4.0,2026-10-25
+hue-chua-thien-mu,hue,Chùa Thiên Mụ,Thien Mu Pagoda,attraction,16.45355,107.54461,,,,,,,"[""riverside""]",https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#See,CC-BY-SA-4.0,2026-10-25
 hue-dai-noi,hue,Đại Nội Huế,Imperial City of Hue,attraction,16.46955,107.57782,,200000,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Imperial_Citadel,CC-BY-SA-4.0,2026-10-25
 hue-lang-tu-duc,hue,Lăng Tự Đức,Tomb of Tu Duc,attraction,16.4332,107.5653,,150000,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Tombs_of_the_Emperors,CC-BY-SA-4.0,2026-10-25
 hue-lang-khai-dinh,hue,Lăng Khải Định,Tomb of Khai Dinh,attraction,16.39892,107.59028,,150000,,,,,[],https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053#Tombs_of_the_Emperors,CC-BY-SA-4.0,2026-10-25

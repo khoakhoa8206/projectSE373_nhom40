@@ -10,7 +10,7 @@
 | `destinations/hue/osm_snapshot.json` | Trích xuất yếu tố nguồn dùng để tái tạo | © OpenStreetMap contributors, ODbL-1.0 |
 | `destinations/hue/travel_matrix.csv` | 900 cặp có hướng, **drive**; gồm 30 cặp cùng điểm | OSRM, routing trên OSM; dữ liệu dẫn xuất ODbL |
 | `destinations/hue/routing_provenance.json` | Endpoint, thời điểm, profile, snap points, số cặp thiếu | Cùng nguồn ma trận |
-| `sources_licenses.csv` | 35 dòng attribution/source/license/date tương ứng POI + vùng | Không thay thế điều khoản giấy phép gốc |
+| `sources_licenses.csv` | 35 nguồn POI/vùng + 3 nguồn giá + 1 nguồn tag | Không thay thế điều khoản giấy phép gốc |
 
 ### Attribution và license
 - **© OpenStreetMap contributors**, https://www.openstreetmap.org/copyright ; dữ liệu OSM/trích xuất/vùng
@@ -46,6 +46,9 @@ way["access"="no"](16.43,107.53,16.49,107.64);
   Làng hương Thủy Xuân dùng name do name:vi bất nhất. Tags history/food/lodging là nhãn tuyển chọn;
   vegetarian chỉ gắn khi OSM có diet:vegetarian=only hoặc diet:vegan=only.
 - Không suy ra is_outdoor/min_age/walking_level/avg_visit_minutes từ tên.
+- W8-P2-2 bổ sung tag `riverside` cho Thiên Mụ từ mô tả Vietnam Tourism, nguồn theo trường trong
+  `sources_licenses.csv`. Tháng mùa lũ chính vụ và phạm vi policy: xem `manifest.md`.
+  `prepare_hue_data.py` không giữ phần bổ sung thủ công này.
 - Giá: chỉ 3 vé lẻ người lớn có nguồn (Đại Nội 200.000, lăng Tự Đức 150.000, lăng Khải Định 150.000 VND;
   Tuổi Trẻ 15/08/2025, giá lẻ không đổi từ 2026 theo Báo Văn hóa), ghi theo trường trong `sources_licenses.csv`
   (`<poi_id>#ticket_price_vnd`). Còn lại **NULL**. Chạy lại `prepare_hue_data.py` sẽ xoá 3 giá này: nhập lại tay.
