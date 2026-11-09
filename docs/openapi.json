@@ -98,7 +98,7 @@
     "/api/trips/{trip_id}/plan": {
       "post": {
         "summary": "Plan Trip",
-        "description": "Chạy graph UC-02 (đồng bộ, có thể mất 1–2 phút). Lỗi → 500 kèm run_id để xem trace.",
+        "description": "Chạy graph UC-02 (đồng bộ, có thể mất 1–2 phút) tới bước người dùng duyệt: kết quả có `interrupt`\n(kind = itinerary_approval) để gửi lại qua /resume. Lỗi → 500 kèm run_id để xem trace.",
         "operationId": "plan_trip_api_trips__trip_id__plan_post",
         "parameters": [
           {
@@ -111,6 +111,140 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trips/{trip_id}/approvals": {
+      "get": {
+        "summary": "List Approvals",
+        "description": "Các câu hỏi / bước duyệt đang chờ người dùng: [{kind, approval_id, data}]. Tải lại trang vẫn thấy.",
+        "operationId": "list_approvals_api_trips__trip_id__approvals_get",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trips/{trip_id}/resume": {
+      "post": {
+        "summary": "Resume Trip",
+        "description": "Trả lời 1 interrupt → graph chạy tiếp đúng chỗ dừng (đọc checkpoint, backend restart vẫn được).",
+        "operationId": "resume_trip_api_trips__trip_id__resume_post",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trips/{trip_id}/messages": {
+      "post": {
+        "summary": "Post Message",
+        "description": "UC-01 hội thoại: lưu tin nhắn; đang có câu hỏi ask_user thì tin nhắn là câu trả lời (resume),\nkhông thì bắt đầu lượt UC-01 mới (graph UC-01 do P2 đăng ký vào GRAPHS).",
+        "operationId": "post_message_api_trips__trip_id__messages_post",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageIn"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -294,6 +428,47 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "MessageIn": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "MessageIn"
+      },
+      "ResumeIn": {
+        "properties": {
+          "approval_id": {
+            "type": "string",
+            "title": "Approval Id"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected",
+              "edited"
+            ],
+            "title": "Decision"
+          },
+          "response": {
+            "title": "Response"
+          }
+        },
+        "type": "object",
+        "required": [
+          "approval_id",
+          "decision"
+        ],
+        "title": "ResumeIn"
       },
       "SessionIn": {
         "properties": {
