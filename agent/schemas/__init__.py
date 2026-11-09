@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = "0.2"  # 0.2: thêm TripEvent (UC-09)
+SCHEMA_VERSION = "0.3"  # 0.2: thêm TripEvent (UC-09) · 0.3: thêm Claim (UC-11)
 
 HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
 
@@ -146,4 +146,29 @@ class TripEvent(BaseModel):
 
         if has_coords(self.payload):
             raise ValueError("payload không được chứa toạ độ; vị trí chỉ ghi bằng poi_id")
+        return self
+
+
+class Claim(BaseModel):
+    """1 dữ kiện đã kiểm (UC-11), trùng bảng claims. 2 validator lặp lại 2 CHECK của schema."""
+
+    claim_id: int | None = None
+    run_id: str
+    target_type: Literal["message", "itinerary_slot"]
+    target_id: str
+    claim_type: Literal["opening_hours", "price", "festival_date", "weather", "distance"]
+    claim_text: str
+    status: Literal["verified", "unverified", "contradicted"]
+    evidence_kind: Literal["tool", "kb"] | None = None
+    evidence_ref: str | None = None  # poi_id / snapshot_id / "<from>→<to>:<mode>" / chunk_id
+    source_url: str | None = None
+    verified_at: str | None = None
+    corrected_text: str | None = None  # giá trị đúng theo nguồn
+
+    @model_validator(mode="after")
+    def _evidence(self):
+        if self.status == "verified" and not self.source_url:
+            raise ValueError("verified phải có source_url")
+        if self.status == "contradicted" and not self.corrected_text:
+            raise ValueError("contradicted phải có corrected_text lấy từ nguồn")
         return self
