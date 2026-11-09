@@ -106,3 +106,18 @@ legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
   .grid { grid-template-columns: 1fr; }
   .slot { grid-template-columns: 1fr; gap: 2px; }
 }
+
+.memory { max-width: 640px; margin: 0 auto; padding: 16px; }
+.memlist { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
+.memlist li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.memhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.memhead small { margin-left: auto; }
+.memrow, .memedit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.memrow span { flex: 1 1 200px; overflow-wrap: anywhere; }
+.memedit input { flex: 1 1 200px; margin: 0; }
+.memrow button, .memedit button:not(.primary), button.danger {
+  border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 12px; cursor: pointer; min-height: 40px;
+}
+.memedit .primary { padding: 8px 14px; }
+button.danger { color: var(--err); border-color: var(--err); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

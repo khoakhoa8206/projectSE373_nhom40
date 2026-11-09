@@ -44,6 +44,18 @@ export type Itinerary = {
   violations: { violation_id: number; slot_id: string | null; rule: string; severity: string; message: string }[];
 };
 
+export type SavedMemory = {
+  memory_id: string;
+  kind: "food_like" | "food_dislike" | "allergy" | "dietary" | "pace" | "interest" | "visited_city" | "other";
+  value: string;
+  sensitivity: "normal" | "sensitive";
+  source_trip_id: string | null;
+  created_at: string;
+  expires_at: string;
+};
+
+export type MemoryList = { items: SavedMemory[]; sensitive_consent: boolean };
+
 export type PlanResult = { run_id: string; itinerary_id: string | null; status: string; error: string | null };
 
 export type TraceEvent = {
@@ -78,12 +90,12 @@ function describe(status: number, detail: Detail): string {
   return `Máy chủ lỗi (HTTP ${status}): backend chưa chạy hoặc gặp lỗi, xem log ở terminal chạy backend.`;
 }
 
-/** Gọi /api/<path>. Có `json` thì POST. Lỗi nào cũng thành ApiError với thông báo tiếng Việt đọc được. */
-export async function api<T>(path: string, init?: { method?: "POST"; json?: unknown }): Promise<T> {
+/** Gọi /api/<path>. Có `init` thì mặc định POST. Lỗi nào cũng thành ApiError với thông báo tiếng Việt đọc được. */
+export async function api<T>(path: string, init?: { method?: "POST" | "PATCH" | "DELETE"; json?: unknown }): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
-      method: init ? "POST" : "GET",
+      method: init ? (init.method ?? "POST") : "GET",
       headers: init?.json === undefined ? undefined : { "Content-Type": "application/json" },
       body: init?.json === undefined ? undefined : JSON.stringify(init.json),
     });

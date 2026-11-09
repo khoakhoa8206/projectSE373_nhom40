@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type ApiError, type Itinerary, type PlanResult, type Slot, type TraceEvent, type TripProfile, type User } from "./api";
 import MapView, { DAY_COLORS } from "./MapView";
+import Memory from "./pages/Memory";
 
 const USER_KEY = "tourguide.user";
 const NO_SLOTS: Slot[] = [];
@@ -36,9 +37,11 @@ function addDays(d: string, n: number) {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(loadUser);
+  const [screen, setScreen] = useState<"plan" | "memory">("plan");
   const pick = (u: User | null) => {
     saveUser(u);
     setUser(u);
+    setScreen("plan");
   };
   return (
     <div className="app">
@@ -47,13 +50,22 @@ export default function App() {
         {user && (
           <span className="who">
             {user.display_name}
+            <button className="link" onClick={() => setScreen(screen === "plan" ? "memory" : "plan")}>
+              {screen === "plan" ? "Bộ nhớ" : "Lập lịch trình"}
+            </button>
             <button className="link" onClick={() => pick(null)}>
               Đổi người dùng
             </button>
           </span>
         )}
       </header>
-      {user ? <PlanScreen user={user} onExpired={() => pick(null)} /> : <UserPicker onPick={pick} />}
+      {!user ? (
+        <UserPicker onPick={pick} />
+      ) : screen === "memory" ? (
+        <Memory onExpired={() => pick(null)} />
+      ) : (
+        <PlanScreen user={user} onExpired={() => pick(null)} />
+      )}
     </div>
   );
 }
