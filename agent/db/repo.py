@@ -291,6 +291,23 @@ def save_kb(docs: list[dict], chunks: list[dict]) -> dict:
     return {"documents": len(docs), "chunks": len(chunks)}
 
 
+def kb_chunks_for_docs(doc_ids) -> list[dict]:
+    """Mọi chunk (kể cả chunk cũ giữ cho lịch sử) của các tài liệu có trong kb_documents, cho validator trích dẫn."""
+    return query(
+        """SELECT c.chunk_id, c.doc_id, c.section, c.chunk_index, c.text
+           FROM kb_chunks c JOIN kb_documents d USING (doc_id)
+           WHERE c.doc_id IN (SELECT value FROM json_each(?)) ORDER BY c.doc_id, c.chunk_index""",
+        (json.dumps(sorted(doc_ids)),),
+    )
+
+
+def save_citations(rows: list[tuple]) -> int:
+    """Ghi [(message_id, chunk_id, quote, is_valid)] vào bảng citations trong 1 transaction."""
+    with closing(get_conn()) as conn, conn:
+        conn.executemany("INSERT INTO citations (message_id, chunk_id, quote, is_valid) VALUES (?, ?, ?, ?)", rows)
+    return len(rows)
+
+
 def kb_search_rows(lang=None, poi_id=None) -> list[dict]:
     """Chunk đang có vector kèm metadata tài liệu (cho retriever), lọc tuỳ chọn theo lang, poi_id."""
     return query(
