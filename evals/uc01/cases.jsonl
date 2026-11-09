@@ -1,0 +1,23 @@
+{"case_id":"I01","source_request_id":"R01"}
+{"case_id":"I02","source_request_id":"R02"}
+{"case_id":"I03","source_request_id":"R03"}
+{"case_id":"I04","source_request_id":"R04"}
+{"case_id":"I05","source_request_id":"R05"}
+{"case_id":"I06","source_request_id":"R06"}
+{"case_id":"I07","source_request_id":"R07"}
+{"case_id":"I08","source_request_id":"R08"}
+{"case_id":"I09","source_request_id":"R09"}
+{"case_id":"I10","source_request_id":"R10"}
+{"case_id":"I11","source_request_id":"R11"}
+{"case_id":"I12","source_request_id":"R12"}
+{"case_id":"I13","source_request_id":"R13"}
+{"case_id":"I14","source_request_id":"R14"}
+{"case_id":"I15","source_request_id":"R15"}
+{"case_id":"I16","turns":["Đi Huế 27–28/11/2026, 2 người lớn, tổng 4 triệu VND."],"gold_profile":{"start_date":"2026-11-27","end_date":"2026-11-28","adults":2,"budget_total_vnd":4000000,"route":"plan"},"checked_fields":["start_date","end_date","adults","budget_total_vnd","route"]}
+{"case_id":"I17","turns":["Muốn đi Huế, 2 người lớn, tổng 4 triệu VND; chưa chốt ngày."],"gold_profile":{"adults":2,"budget_total_vnd":4000000,"route":"ask_user"},"checked_fields":["start_date","end_date","adults","route"],"expect":{"must_ask":["start_date"]}}
+{"case_id":"I18","turns":["Tôi đi Huế một mình ngày 28/11/2026, chưa xác định ngân sách."],"gold_profile":{"start_date":"2026-11-28","end_date":"2026-11-28","adults":1,"budget_total_vnd":null,"route":"ask_user"},"checked_fields":["start_date","end_date","adults","budget_total_vnd","route"],"expect":{"must_ask":["budget_total_vnd"]}}
+{"case_id":"I19","turns":["Đi Huế từ 29/11 đến 27/11/2026, 2 người lớn, 4 triệu VND."],"gold_profile":{"adults":2,"budget_total_vnd":4000000,"route":"ask_user"},"checked_fields":["route","adults","budget_total_vnd"],"expect":{"conflict":"reversed_dates"}}
+{"case_id":"I20","turns":["Solo trip to Hue on November 28, 2026. Total budget 1 million VND."],"gold_profile":{"start_date":"2026-11-28","end_date":"2026-11-28","adults":1,"language":"en","budget_total_vnd":1000000,"route":"plan"},"checked_fields":["route","start_date","end_date","adults","language","budget_total_vnd"]}
+{"case_id":"I21","turns":["Đi Đà Lạt ngày 28/11/2026, một người, 2 triệu."],"gold_profile":{"route":"unsupported"},"checked_fields":["route"]}
+{"case_id":"I22","turns":["Đi Huế 27–28/11/2026, tổng 4 triệu VND, chưa chốt số người.","Chốt 2 người lớn."],"gold_profile":{"start_date":"2026-11-27","end_date":"2026-11-28","adults":2,"budget_total_vnd":4000000,"route":"plan"},"checked_fields":["route","start_date","end_date","adults","budget_total_vnd"],"expect":{"first_route":"ask_user","first_must_ask":["adults"]}}
+{"case_id":"I23","turns":["Huế 27–28/11/2026, 2 người lớn hay 4 người lớn chưa chốt, tổng 4 triệu VND.","Xác nhận chỉ 2 người lớn."],"gold_profile":{"start_date":"2026-11-27","end_date":"2026-11-28","adults":2,"budget_total_vnd":4000000,"route":"plan"},"checked_fields":["route","adults","start_date","end_date","budget_total_vnd"],"expect":{"first_route":"ask_user","first_conflict":true}}
