@@ -1,4 +1,5 @@
-"""Graph UC-02 Phase 1: load_profile → plan → validate → (còn vi phạm và < 4 vòng thì quay lại plan) → finalize."""
+"""Graph UC-02: load_profile → plan → validate → (còn vi phạm và < 4 vòng thì quay lại plan) → finalize.
+Chạy có checkpointer SQLite (thread_id = trip_id): backend chết giữa chừng thì continue_run chạy tiếp đúng node."""
 
 import time
 from typing import TypedDict
@@ -8,6 +9,7 @@ from openai import InternalServerError, RateLimitError
 
 from agent.db import repo
 from agent.schemas import Itinerary, TripProfile, Violation
+from agent.src.graph.checkpoint import config, open_checkpointer
 from agent.src.graph.loop import AgentLoopLimitError, make_client, ms
 from agent.src.nodes.plan import plan
 from agent.src.validation.validator import check_fabrication, validate
@@ -27,7 +29,7 @@ class State(TypedDict, total=False):
     history: list[tuple[int, Violation]]  # (vòng, vi phạm) của mọi vòng, để lưu cột resolved
     best_itinerary: Itinerary
     best_violations: list[Violation]
-    best_score: tuple[int, int, int]
+    best_score: list[int]  # checkpoint đọc lại tuple thành list, nên dùng list ngay từ đầu
     planning_stopped: bool
     planning_warning: str
     context: dict  # ứng viên + dự báo lấy ở vòng đầu, vòng sửa dùng lại
@@ -70,10 +72,10 @@ def check(state):
     violations = validate(state["itinerary"], state["profile"], weather) + check_fabrication(state["itinerary"])
     repo.log_event(state["run_id"], "validate", "guardrail", name="validator",
                    result={"round": state["round"], "violations": [v.model_dump() for v in violations]})  # fmt: skip
-    score = (sum(v.severity == "high" for v in violations), len(violations),
-             sum(v.severity == "medium" for v in violations))
+    score = [sum(v.severity == "high" for v in violations), len(violations),
+             sum(v.severity == "medium" for v in violations)]
     result = {"violations": violations, "history": state["history"] + [(state["round"], v) for v in violations]}
-    if "best_score" not in state or score < state["best_score"]:
+    if state.get("best_score") is None or score < state["best_score"]:
         result.update(best_itinerary=state["itinerary"].model_copy(deep=True), best_violations=violations, best_score=score)
     return result
 
@@ -83,7 +85,7 @@ def plan_or_keep_best(state, client, tools, usage):
     try:
         return plan(state, client, tools, usage)
     except (AgentLoopLimitError, RateLimitError, InternalServerError) as error:
-        if "best_itinerary" not in state:
+        if state.get("best_itinerary") is None:
             raise  # chưa có bản hợp lệ theo schema thì không tạo kết quả giả
         round_ = state["round"] + 1
         limited = isinstance(error, AgentLoopLimitError)
@@ -99,8 +101,9 @@ def plan_or_keep_best(state, client, tools, usage):
 
 
 def finalize(state):
-    remaining = state.get("best_violations", state["violations"])
-    best = state.get("best_itinerary", state["itinerary"])
+    best, remaining = state.get("best_itinerary"), state.get("best_violations")
+    if best is None:
+        best, remaining = state["itinerary"], state["violations"]
     status = "failed_validation" if remaining else "validated"
     itinerary = best.model_copy(deep=True, update={"status": status, "planner_rounds": state["round"]})
     if state.get("planning_warning"):
@@ -129,20 +132,7 @@ def finalize(state):
     return {"itinerary": itinerary}
 
 
-def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None):
-    """Chạy 1 lượt UC-02 và luôn đóng run (token, chi phí, độ trễ). Trả {run_id, itinerary_id, status, error}."""
-    run_id = repo.create_run("UC-02", trip_id, user_id, eval_case_id)
-    usage = {"in": 0, "out": 0, "cost": 0.0}
-    t0 = time.perf_counter()
-    try:  # tạo run trước: thiếu tool / API key vẫn có run_id + trace để PWA xem log
-        client = client or make_client()
-        tools = default_tools() if tools is None else tools
-    except Exception as e:  # noqa: BLE001
-        error = f"{type(e).__name__}: {e}"
-        repo.log_event(run_id, "setup", "error", error=error)
-        repo.finish_run(run_id, "failed", 0, 0, 0.0, ms(t0))
-        return {"run_id": run_id, "itinerary_id": None, "status": "error", "error": error}
-
+def build_uc02(client, tools, usage):
     g = StateGraph(State)
     g.add_node("load_profile", traced("load_profile", load_profile))
     g.add_node("plan", traced("plan", lambda s: plan_or_keep_best(s, client, tools, usage)))
@@ -153,13 +143,63 @@ def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None):
     g.add_conditional_edges("plan", lambda s: "finalize" if s.get("planning_stopped") else "validate")
     g.add_conditional_edges("validate", lambda s: "plan" if s["violations"] and s["round"] < MAX_ROUNDS else "finalize")
     g.add_edge("finalize", END)
+    return g
 
-    try:
-        out = g.compile().invoke({"run_id": run_id, "trip_id": trip_id, "itinerary_id": repo.new_id("it")})
-        result = {"run_id": run_id, "itinerary_id": out["itinerary"].itinerary_id, "status": out["itinerary"].status,
-                  "error": None}  # fmt: skip
-    except Exception as e:  # noqa: BLE001 — lỗi nào cũng phải đóng run và trả run_id
-        result = {"run_id": run_id, "itinerary_id": None, "status": "error", "error": f"{type(e).__name__}: {e}"}
-    repo.finish_run(run_id, "failed" if result["error"] else "succeeded", usage["in"], usage["out"], usage["cost"],
-                    ms(t0))  # fmt: skip
-    return result
+
+GRAPHS = {"UC-02": build_uc02}  # runs.uc → hàm dựng graph; UC khác đăng ký thêm ở đây để continue/resume tìm đúng
+
+
+def drive(uc, run_id, trip_id, graph_input, client=None, tools=None):
+    """Chạy graph trên thread trip_id tới END (hoặc lỗi), cộng token/độ trễ vào runs. Trả state cuối, None nếu lỗi.
+    graph_input = dict: lượt chạy mới (xoá checkpoint cũ của trip); None: chạy tiếp từ checkpoint cuối."""
+    usage = {"in": 0, "out": 0, "cost": 0.0}
+    t0 = time.perf_counter()
+    out, error = None, None
+    try:  # lỗi setup vẫn có run_id + trace để PWA xem log
+        client = client or make_client()
+        tools = default_tools() if tools is None else tools
+    except Exception as e:  # noqa: BLE001
+        error = f"{type(e).__name__}: {e}"
+        repo.log_event(run_id, "setup", "error", error=error)
+    if error is None:
+        with open_checkpointer() as saver:
+            if graph_input is not None:
+                saver.delete_thread(trip_id)  # lượt mới không được kế thừa best_* của lượt trước
+            graph = GRAPHS[uc](client, tools, usage).compile(checkpointer=saver)
+            try:
+                out = graph.invoke(graph_input, config(trip_id))
+            except Exception as e:  # noqa: BLE001 — lỗi nào cũng phải đóng run và trả run_id
+                error = f"{type(e).__name__}: {e}"
+    repo.finish_run(run_id, "failed" if error else "succeeded", usage["in"], usage["out"], usage["cost"], ms(t0))
+    return out, error
+
+
+def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None, run_id=None):
+    """Chạy 1 lượt UC-02 và luôn đóng run (token, chi phí, độ trễ). Trả {run_id, itinerary_id, status, error}."""
+    run_id = run_id or repo.create_run("UC-02", trip_id, user_id, eval_case_id)
+    out, error = drive("UC-02", run_id, trip_id, {"run_id": run_id, "trip_id": trip_id, "itinerary_id": repo.new_id("it")},
+                       client, tools)  # fmt: skip
+    return uc02_result(run_id, out, error)
+
+
+def uc02_result(run_id, out, error):
+    if error:
+        return {"run_id": run_id, "itinerary_id": None, "status": "error", "error": error}
+    return {"run_id": run_id, "itinerary_id": out["itinerary"].itinerary_id, "status": out["itinerary"].status,
+            "error": None}  # fmt: skip
+
+
+def continue_run(trip_id, client=None, tools=None):
+    """Backend chết khi graph đang chạy: chạy tiếp từ checkpoint cuối của trip, không lặp lại node đã xong.
+    Trả None nếu trip không có lượt chạy dở."""
+    with open_checkpointer() as saver:
+        snapshot = saver.get_tuple(config(trip_id))
+        if snapshot is None:
+            return None
+        run_id = snapshot.checkpoint["channel_values"]["run_id"]
+        uc = repo.query("SELECT uc FROM runs WHERE run_id = ?", (run_id,))[0]["uc"]
+        if not GRAPHS[uc](None, None, {}).compile(checkpointer=saver).get_state(config(trip_id)).next:
+            return None
+    repo.query("UPDATE runs SET status = 'running', ended_at = NULL WHERE run_id = ?", (run_id,))
+    out, error = drive(uc, run_id, trip_id, None, client, tools)
+    return uc02_result(run_id, out, error)
