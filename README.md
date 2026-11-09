@@ -24,7 +24,7 @@ Không có `make` thì gõ thẳng lệnh tương ứng:
 | `make db` | `python -m agent.db.init` rồi `python scripts/load_destination.py hue --complete` | Tạo lại DB ở `DB_PATH` (xoá DB cũ), 3 người dùng hư cấu, nạp 30 POI/5 vùng/900 cặp drive |
 | `make dev` | `python scripts/dev.py` | mock-weather :8081 + backend :8000 + web :5173 |
 | `make test` | `ruff check . && pytest -q` | Lint + test (CI chạy đúng 2 lệnh này + gitleaks) |
-| `make eval` | `python -m evals.run --uc UC-02` | Chạy toàn bộ eval case, ghi `results/<id>/summary.csv` |
+| `make eval` | `python -m evals.run --all` (hoặc `--uc UC-02`) | Chạy eval mọi UC có plug-in `evals/<uc>/{cases.jsonl,scorer.py}`, ghi `results/<id>/summary.csv` |
 | `make openapi` | xem Makefile | Sinh lại `docs/openapi.json` |
 
 Windows mà in tiếng Việt bị lỗi encoding thì đặt `PYTHONUTF8=1` (Makefile đã đặt sẵn).
