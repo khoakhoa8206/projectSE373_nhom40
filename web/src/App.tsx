@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type ApiError, type Itinerary, type PlanResult, type Slot, type TraceEvent, type TripProfile, type User } from "./api";
 import MapView, { DAY_COLORS } from "./MapView";
+import ProfilePage from "./pages/Profile";
 
 const USER_KEY = "tourguide.user";
 const NO_SLOTS: Slot[] = [];
@@ -36,6 +37,7 @@ function addDays(d: string, n: number) {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(loadUser);
+  const [page, setPage] = useState<"chat" | "quick">("chat");
   const pick = (u: User | null) => {
     saveUser(u);
     setUser(u);
@@ -53,7 +55,14 @@ export default function App() {
           </span>
         )}
       </header>
-      {user ? <PlanScreen user={user} onExpired={() => pick(null)} /> : <UserPicker onPick={pick} />}
+      {user ? <>
+        <nav className="page-tabs" aria-label="Chế độ nhập hồ sơ">
+          <button aria-current={page === "chat" ? "page" : undefined} onClick={() => setPage("chat")}>Hội thoại</button>
+          <button aria-current={page === "quick" ? "page" : undefined} onClick={() => setPage("quick")}>Nhập nhanh</button>
+        </nav>
+        {page === "chat" ? <ProfilePage key={user.user_id} user={user} onExpired={() => pick(null)} />
+          : <PlanScreen key={user.user_id} user={user} onExpired={() => pick(null)} />}
+      </> : <UserPicker onPick={pick} />}
     </div>
   );
 }
@@ -271,7 +280,7 @@ function ItineraryView({ it }: { it: Itinerary }) {
         {it.status === "validated" ? `Đã qua validator sau ${it.planner_rounds} vòng` : `Còn vi phạm sau ${it.planner_rounds} vòng`}
       </p>
       <p>
-        Tổng chi phí đã có giá: <b>{it.total_cost_vnd === null ? "Chưa có giá xác minh" : vnd(it.total_cost_vnd)}</b>
+        Tổng chi phí đã có giá: <b>{it.total_cost_vnd === null ? "Tổng chi phí chưa đầy đủ" : vnd(it.total_cost_vnd)}</b>
         {it.has_unpriced_item ? " + các mục chưa có giá" : ""}
       </p>
       <p className="hint">
@@ -322,8 +331,8 @@ function SlotItem({ s }: { s: Slot }) {
           {s.travel_minutes_from_prev != null && <span className="tag">{s.travel_minutes_from_prev} phút di chuyển</span>}
           {s.cost_source === "tool" && s.cost_vnd != null && <span className="tag">{vnd(s.cost_vnd)}</span>}
           {s.cost_source === "free" && <span className="tag">Miễn phí</span>}
-          {s.cost_source === "unverified" && <span className="tag warn">chưa có giá</span>}
-          {s.hours_status === "unverified" && <span className="tag warn">giờ mở cửa chưa xác minh</span>}
+          {s.cost_vnd === null && <span className="tag warn">Chưa có giá</span>}
+          {s.hours_status === "unverified" && <span className="tag warn">Giờ mở cửa chưa xác minh</span>}
           {s.hours_status === "verified" && <span className="tag ok">giờ mở cửa đã xác minh</span>}
         </div>
         {s.note && <div className="muted small">{s.note}</div>}
