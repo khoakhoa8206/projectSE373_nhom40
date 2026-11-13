@@ -1,6 +1,7 @@
 """Rule và fabrication checker dùng dữ liệu hư cấu, không gọi LLM/mạng."""
 
 import copy
+import json
 from datetime import date
 
 import pytest
@@ -69,17 +70,21 @@ def test_budget_boundary_and_unknown_price(profile, facts):
 
 @pytest.mark.parametrize("end,violates", [("11:00", False), ("11:01", True)])
 def test_rain_two_hour_boundary(profile, facts, end, violates):
-    it = Itinerary(slots=[slot(end=end)])
-    weather = {"2026-10-26": {"condition": "heavy_rain", "is_anomalous": 0}}
+    # Ngoài chính vụ để kiểm riêng ngưỡng cũ; trong chính vụ có policy chặt hơn.
+    profile.start_date = profile.end_date = date(2026, 8, 24)
+    it = Itinerary(slots=[slot(end=end, slot_date=profile.start_date)])
+    weather = {"2026-08-24": {"condition": "heavy_rain", "is_anomalous": 0}}
     assert ("weather" in rules(it, profile, facts, weather)) is violates
 
 
 def test_rain_uses_daily_sum_and_unknown_outdoor(profile, facts):
+    profile.start_date = profile.end_date = date(2026, 8, 24)
     facts["pois"]["b"]["is_outdoor"] = None
-    it = Itinerary(slots=[slot(end="10:15"), slot("b", "10:45", "11:45", travel_minutes_from_prev=30)])
-    rain = {"2026-10-26": {"condition": "heavy_rain"}}
+    it = Itinerary(slots=[slot(end="10:15", slot_date=profile.start_date),
+                          slot("b", "10:45", "11:45", slot_date=profile.start_date, travel_minutes_from_prev=30)])
+    rain = {"2026-08-24": {"condition": "heavy_rain"}}
     assert "weather" in rules(it, profile, facts, rain)
-    rain["2026-10-26"]["is_anomalous"] = 1
+    rain["2026-08-24"]["is_anomalous"] = 1
     assert "weather" not in rules(it, profile, facts, rain)
 
 
@@ -204,3 +209,82 @@ def test_pace_counts_rest_slots_like_scorer(profile, facts):
     rest = {"cost_vnd": None, "cost_source": "unverified", "hours_status": "not_applicable"}
     it = Itinerary(slots=[slot(start="08:00", end="10:00"), slot(None, "10:00", "14:01", **rest)])
     assert "overload" in rules(it, profile, facts)  # 120 + 241 phút nghỉ = 361 > 360
+
+
+@pytest.mark.parametrize("month", [1, 8, 9, 10, 11, 12])
+@pytest.mark.parametrize("kind", ["outdoor", "river", "riverside", "boat_trip"])
+def test_flood_season_blocks_short_exposed_slots(profile, facts, month, kind):
+    """Tháng có nguồn chỉ kết hợp dự báo; không suy ra lũ từ lịch tháng."""
+    day = date(2026, month, 15)
+    profile.start_date = profile.end_date = day
+    facts["pois"]["a"].update(
+        opening_hours="24/7", is_outdoor=kind == "outdoor",
+        tags=[] if kind == "outdoor" else [kind],
+    )
+    it = Itinerary(slots=[slot(end="09:30", slot_date=day)])
+    rain = {day.isoformat(): {"condition": "heavy_rain"}}
+    found = [v for v in validate_with_facts(it, profile, rain, facts) if v.rule == "weather"]
+
+    assert bool(found) is (month in {9, 10, 11, 12})
+    if found:
+        assert found[0].slot_id == "test-a"
+        assert "3279/QĐ-UBND" in found[0].message
+
+
+@pytest.mark.parametrize("forecast", [
+    {}, {"condition": "clear", "precip_mm": 0},
+    {"condition": "heavy_rain", "is_anomalous": 1},
+    {"condition": "heavy_rain", "status": "no_forecast"},
+    {"condition": "heavy_rain", "status": "anomalous"},
+])
+def test_flood_season_requires_usable_heavy_rain(profile, facts, forecast):
+    facts["pois"]["a"].update(is_outdoor=0, tags='["riverside"]')
+    it = Itinerary(slots=[slot(end="09:30")])
+
+    assert "weather" not in rules(it, profile, facts, {"2026-10-26": forecast})
+
+
+@pytest.mark.parametrize("tags", [["riverside"], '["riverside"]', ["river"], '["boat_trip"]'])
+def test_flood_tags_work_in_pure_and_db_facts(profile, facts, tags):
+    facts["pois"]["a"].update(is_outdoor=0, tags=tags)
+    it = Itinerary(slots=[slot(end="09:30", activity="Tham quan")])
+
+    assert "weather" in rules(it, profile, facts, {"2026-10-26": {"condition": "heavy_rain"}})
+
+
+def test_flood_policy_does_not_guess_tags_from_activity(profile, facts):
+    facts["pois"]["a"].update(is_outdoor=0, tags="[]")
+    it = Itinerary(slots=[slot(end="09:30", activity="Đi thuyền trên sông")])
+
+    assert "weather" not in rules(it, profile, facts, {"2026-10-26": {"condition": "heavy_rain"}})
+
+
+def test_flood_policy_keeps_known_indoor_slot(profile, facts):
+    facts["pois"]["a"].update(is_outdoor=0, tags=["history"])
+    it = Itinerary(slots=[slot()])
+
+    assert "weather" not in rules(it, profile, facts, {"2026-10-26": {"condition": "heavy_rain"}})
+
+
+def test_flood_policy_uses_existing_precip_threshold(profile, facts):
+    facts["pois"]["a"].update(is_outdoor=0, tags=["riverside"])
+    it = Itinerary(slots=[slot(end="09:30")])
+
+    assert "weather" in rules(it, profile, facts, {"2026-10-26": {"condition": "rain", "precip_mm": 50}})
+
+
+def test_flood_policy_is_hue_only(profile, facts):
+    facts["pois"]["a"].update(destination_id="test-other", is_outdoor=1)
+    it = Itinerary(slots=[slot(end="09:30")])
+
+    assert "weather" not in rules(it, profile, facts, {"2026-10-26": {"condition": "heavy_rain"}})
+
+
+def test_flood_policy_preserves_inputs(profile, facts):
+    facts["pois"]["a"].update(is_outdoor=0, tags=json.dumps(["riverside"]))
+    it = Itinerary(slots=[slot(end="09:30")])
+    weather = {"2026-10-26": {"condition": "heavy_rain"}}
+    before = copy.deepcopy((it, profile, facts, weather))
+
+    assert "weather" in rules(it, profile, facts, weather)
+    assert (it, profile, facts, weather) == before

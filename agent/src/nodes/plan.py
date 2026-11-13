@@ -130,7 +130,10 @@ def fill_facts(slots, people, facts):
             s.cost_vnd, s.cost_source = expected_cost(poi["ticket_price_vnd"], people)
             s.hours_status = "unverified" if opening_intervals(poi["opening_hours"], s.slot_date) is None else "verified"
             prev = last.get(s.day_index)
-            s.travel_minutes_from_prev = None if prev is None else travel.get((prev, s.poi_id), s.travel_minutes_from_prev)
+            s.travel_minutes_from_prev = None if prev is None else travel.get((prev, s.poi_id))
+            if prev is not None and (prev, s.poi_id) not in travel:
+                warning = "chưa có thời gian di chuyển; cần đổi/giảm điểm, không tự ước tính"
+                s.note = "; ".join(filter(None, (s.note, warning)))
             last[s.day_index] = s.poi_id
         changed += before != (s.cost_vnd, s.cost_source, s.hours_status, s.travel_minutes_from_prev)
     return changed
@@ -146,7 +149,8 @@ def plan(state, client, tools, usage):
             "profile": state["profile"].model_dump(mode="json"),
             "previous_itinerary": previous and [s.model_dump(mode="json") for s in previous.slots],
             "violations_to_fix": [v.model_dump() for v in state["violations"]],
-            "user_feedback": state.get("user_feedback"),
+            # user_feedback: luồng duyệt P1 (#64); feedback: graph duyệt riêng của P2 (build_approval_graph)
+            "user_feedback": state.get("user_feedback") or state.get("feedback"),
             "user_memory": state.get("memory") or [],
             "verified_context": context,
         },

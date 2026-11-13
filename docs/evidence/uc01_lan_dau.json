@@ -1,0 +1,458 @@
+[
+  {
+    "case_id": "I01",
+    "run_id": "r-021d297c",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 6,
+      "hard_total": 6,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1426,
+    "latency_ms": 5562
+  },
+  {
+    "case_id": "I02",
+    "run_id": "r-17080ef0",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1428,
+    "latency_ms": 4617
+  },
+  {
+    "case_id": "I03",
+    "run_id": "r-db775742",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1369,
+    "latency_ms": 1713
+  },
+  {
+    "case_id": "I04",
+    "run_id": "r-ebafa3bc",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1402,
+    "latency_ms": 7961
+  },
+  {
+    "case_id": "I05",
+    "run_id": "r-b1c221be",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1378,
+    "latency_ms": 5240
+  },
+  {
+    "case_id": "I06",
+    "run_id": "r-46b1770b",
+    "passed": false,
+    "reasons": [
+      "Sai trường start_date"
+    ],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 3,
+      "hard_total": 4,
+      "hard_accuracy": 0.75,
+      "conflict_expected": true,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1433,
+    "latency_ms": 3924
+  },
+  {
+    "case_id": "I07",
+    "run_id": "r-dccc43e1",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 0,
+      "hard_total": 0,
+      "hard_accuracy": null,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": true,
+      "unsupported_correct": true
+    },
+    "status": "succeeded",
+    "tokens": 1363,
+    "latency_ms": 2729
+  },
+  {
+    "case_id": "I08",
+    "run_id": "r-1012132a",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 0,
+      "hard_total": 0,
+      "hard_accuracy": null,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": true,
+      "unsupported_correct": true
+    },
+    "status": "succeeded",
+    "tokens": 1361,
+    "latency_ms": 7233
+  },
+  {
+    "case_id": "I09",
+    "run_id": "r-51fa7526",
+    "passed": false,
+    "reasons": [
+      "Sai trường hard_constraints"
+    ],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 6,
+      "hard_accuracy": 0.8333333333333334,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1466,
+    "latency_ms": 5850
+  },
+  {
+    "case_id": "I10",
+    "run_id": "r-da5ee9b9",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1397,
+    "latency_ms": 3544
+  },
+  {
+    "case_id": "I11",
+    "run_id": "r-8a24c132",
+    "passed": false,
+    "reasons": [
+      "Thiếu turn hoặc output/questions không hợp schema",
+      "Run không succeeded",
+      "Sai trường route",
+      "Sai trường start_date",
+      "Sai trường end_date",
+      "Sai trường adults",
+      "Sai trường budget_total_vnd",
+      "Sai trường language",
+      "Không phát hiện mâu thuẫn"
+    ],
+    "metrics": {
+      "schema_valid": false,
+      "hard_correct": 0,
+      "hard_total": 4,
+      "hard_accuracy": 0.0,
+      "conflict_expected": true,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "failed",
+    "tokens": 0,
+    "latency_ms": 19625
+  },
+  {
+    "case_id": "I12",
+    "run_id": "r-54bc2aa7",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 6,
+      "hard_total": 6,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1442,
+    "latency_ms": 1191
+  },
+  {
+    "case_id": "I13",
+    "run_id": "r-a5781fcb",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": true,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1397,
+    "latency_ms": 5372
+  },
+  {
+    "case_id": "I14",
+    "run_id": "r-c2b3239c",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1402,
+    "latency_ms": 6266
+  },
+  {
+    "case_id": "I15",
+    "run_id": "r-d98d2ea2",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 5,
+      "hard_total": 5,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1397,
+    "latency_ms": 4043
+  },
+  {
+    "case_id": "I16",
+    "run_id": "r-ce92d6db",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1393,
+    "latency_ms": 7453
+  },
+  {
+    "case_id": "I17",
+    "run_id": "r-0b781bde",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 3,
+      "hard_total": 3,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1364,
+    "latency_ms": 5669
+  },
+  {
+    "case_id": "I18",
+    "run_id": "r-072ee541",
+    "passed": false,
+    "reasons": [
+      "Sai trường end_date"
+    ],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 3,
+      "hard_total": 4,
+      "hard_accuracy": 0.75,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1372,
+    "latency_ms": 1129
+  },
+  {
+    "case_id": "I19",
+    "run_id": "r-b21eac1b",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 2,
+      "hard_total": 2,
+      "hard_accuracy": 1.0,
+      "conflict_expected": true,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1427,
+    "latency_ms": 5039
+  },
+  {
+    "case_id": "I20",
+    "run_id": "r-3ac1e102",
+    "passed": false,
+    "reasons": [
+      "Sai trường route",
+      "Sai trường end_date"
+    ],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 3,
+      "hard_total": 4,
+      "hard_accuracy": 0.75,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 1376,
+    "latency_ms": 5281
+  },
+  {
+    "case_id": "I21",
+    "run_id": "r-955bd60d",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 0,
+      "hard_total": 0,
+      "hard_accuracy": null,
+      "conflict_expected": false,
+      "conflict_detected": false,
+      "unsupported_expected": true,
+      "unsupported_correct": true
+    },
+    "status": "succeeded",
+    "tokens": 1378,
+    "latency_ms": 4679
+  },
+  {
+    "case_id": "I22",
+    "run_id": "r-c6f5a0bf",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": false,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 2876,
+    "latency_ms": 10614
+  },
+  {
+    "case_id": "I23",
+    "run_id": "r-ab81811f",
+    "passed": true,
+    "reasons": [],
+    "metrics": {
+      "schema_valid": true,
+      "hard_correct": 4,
+      "hard_total": 4,
+      "hard_accuracy": 1.0,
+      "conflict_expected": true,
+      "conflict_detected": true,
+      "unsupported_expected": false,
+      "unsupported_correct": null
+    },
+    "status": "succeeded",
+    "tokens": 2889,
+    "latency_ms": 10678
+  }
+]

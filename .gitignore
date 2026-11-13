@@ -10,3 +10,5 @@ node_modules/
 web/dist/
 .pytest_cache/
 .ruff_cache/
+.runtime/
+.fastembed/

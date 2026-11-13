@@ -198,7 +198,8 @@ def test_no_digits_skips_llm(run_id, monkeypatch):
     assert verify.verify_text("Đại Nội rất đẹp, nên đi buổi sáng.", run_id, ctx=CTX) == [] and calls == []
 
 
-@pytest.mark.parametrize("name", sorted(p.name for p in FIXTURES.glob("*.json")))
+# Chỉ bộ mẫu có "expected" của UC-11 (01-..03-); lịch trình mẫu của P2 cùng thư mục có định dạng khác
+@pytest.mark.parametrize("name", sorted(p.name for p in FIXTURES.glob("[0-9][0-9]-*.json")))
 def test_sample_itineraries(tmp_path, monkeypatch, name):
     """verify_itinerary chạy độc lập (chưa ghép graph) trên lịch trình mẫu + dữ liệu Huế thật + mock-weather."""
     monkeypatch.setenv("DB_PATH", str(tmp_path / "uc11.db"))

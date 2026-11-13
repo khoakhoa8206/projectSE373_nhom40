@@ -1,5 +1,6 @@
 """Kiểm nghiệp vụ bằng code. Core nhận facts thuần; facade giữ chữ ký P1, chỉ đọc snapshot DB."""
 
+import json
 from collections import defaultdict
 from datetime import timedelta
 from itertools import pairwise
@@ -14,6 +15,22 @@ PACE_MINUTES = {"relaxed": 360, "moderate": 480, "packed": 600}
 PACE_ATTRACTIONS = {"relaxed": 3, "moderate": 5, "packed": 7}
 PACE_WALK_M = {"relaxed": 3000, "moderate": 6000, "packed": 10000}
 HEAVY_RAIN_MM = 50.0
+# Chính vụ theo Kế hoạch kèm QĐ 3279/QĐ-UBND (06/10/2026), tr.5; nguồn: data/manifest.md.
+HUE_FLOOD_MONTHS = {9, 10, 11, 12}
+RIVER_TAGS = {"river", "riverside", "boat_trip"}
+
+
+def _flood_exposed(poi):
+    """Chỉ dùng metadata; tags là list ở core hoặc JSON khi đọc snapshot SQLite."""
+    if poi.get("is_outdoor") in (1, True):
+        return True
+    tags = poi.get("tags") or []
+    if isinstance(tags, str):
+        try:
+            tags = json.loads(tags)
+        except json.JSONDecodeError:
+            tags = []
+    return isinstance(tags, list) and any(tag in RIVER_TAGS for tag in tags)
 
 
 def party_size(profile: TripProfile) -> int:
@@ -143,6 +160,11 @@ def validate_with_facts(itinerary: Itinerary, profile: TripProfile, weather: dic
             activity_minutes += duration + (slot.travel_minutes_from_prev or 0)
             if poi:
                 attractions += poi.get("category") == "attraction"
+                if (heavy and poi.get("destination_id") == "hue"
+                        and slot.slot_date.month in HUE_FLOOD_MONTHS and _flood_exposed(poi)):
+                    violations.append(_violation("weather", (
+                        f"Ngày {slot.slot_date}: mưa lớn trong mùa lũ chính vụ Huế (tháng 9–12, "
+                        "QĐ 3279/QĐ-UBND; nguồn: data/manifest.md); bỏ/đổi slot sông, ven sông hoặc ngoài trời."), slot))
                 # Điểm tham quan chưa rõ outdoor không được mặc định an toàn trong mưa lớn; quán ăn/lưu trú thì không tính.
                 if poi.get("is_outdoor") in (1, True) or (poi.get("is_outdoor") is None and poi.get("category") == "attraction"):
                     outdoor_minutes += duration

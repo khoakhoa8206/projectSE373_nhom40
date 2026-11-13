@@ -394,3 +394,54 @@ def latest_journal(trip_id, scope, day_index, lang):
         return None
     return rows[0] | {"content": json.loads(rows[0]["content"]), "event_ids": json.loads(rows[0]["event_ids"])}
 
+def prepare_itinerary_approval(itinerary_id, trip_id, user_id, run_id):
+    """ID ổn định khi node interrupt replay; chỉ duyệt bản mới nhất đúng owner."""
+    approval_id = f"ap-{itinerary_id}"
+    with closing(get_conn()) as conn, conn:
+        current = conn.execute(
+            """SELECT i.itinerary_id FROM itineraries i JOIN trips t USING(trip_id)
+               WHERE i.trip_id=? AND t.user_id=? ORDER BY i.version DESC LIMIT 1""", (trip_id, user_id),
+        ).fetchone()
+        if current is None or current[0] != itinerary_id:
+            raise ValueError("Lịch trình không thuộc người dùng hoặc không còn là bản mới nhất.")
+        conn.execute(
+            """INSERT OR IGNORE INTO approvals (approval_id, trip_id, run_id, kind, payload, created_at)
+               VALUES (?, ?, ?, 'itinerary_approval', ?, ?)""",
+            (approval_id, trip_id, run_id, _json({"itinerary_id": itinerary_id}), now()),
+        )
+    return approval_id
+
+
+def decide_itinerary_approval(approval_id, trip_id, user_id, decision, response=None):
+    """Quyết định nguyên tử, kiểm owner/bản cũ; không nhận user_id từ body API."""
+    if decision not in {"approved", "edited", "rejected"}:
+        raise ValueError("Quyết định không hợp lệ.")
+    if response is not None and (not isinstance(response, str) or len(response) > 4000):
+        raise ValueError("Phản hồi phải là chuỗi tối đa 4000 ký tự.")
+    if decision == "edited" and not (response or "").strip():
+        raise ValueError("Cần ghi rõ nội dung muốn sửa.")
+    with closing(get_conn()) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """SELECT a.* FROM approvals a JOIN trips t USING(trip_id)
+               WHERE a.approval_id=? AND a.trip_id=? AND t.user_id=? AND a.kind='itinerary_approval'""",
+            (approval_id, trip_id, user_id),
+        ).fetchone()
+        if row is None:
+            raise ValueError("Không tìm thấy yêu cầu duyệt của người dùng.")
+        itinerary_id = json.loads(row["payload"])["itinerary_id"]
+        current = conn.execute("SELECT itinerary_id FROM itineraries WHERE trip_id=? ORDER BY version DESC LIMIT 1",
+                               (trip_id,)).fetchone()
+        if current is None or current[0] != itinerary_id:
+            raise ValueError("Yêu cầu duyệt thuộc lịch trình cũ.")
+        if row["decision"] != "pending":
+            if row["decision"] == decision and row["user_response"] == response:
+                return itinerary_id
+            raise ValueError("Yêu cầu duyệt đã có quyết định khác.")
+        ts = now()
+        conn.execute("UPDATE approvals SET decision=?, user_response=?, decided_at=? WHERE approval_id=?",
+                     (decision, response, ts, approval_id))
+        if decision == "approved":
+            conn.execute("UPDATE itineraries SET status='approved', approved_at=? WHERE itinerary_id=?", (ts, itinerary_id))
+            conn.execute("UPDATE trips SET status='approved', updated_at=? WHERE trip_id=?", (ts, trip_id))
+    return itinerary_id

@@ -101,4 +101,3 @@ def test_api_resume_flow_and_ownership(db, monkeypatch):
     assert done["status"] == "approved"
     assert c.post(f"/api/trips/{trip_id}/resume", json=body).status_code == 409
     assert c.get(f"/api/trips/{trip_id}/approvals").json() == [done["interrupt"]]  # còn bước lưu bộ nhớ
-    assert c.post(f"/api/trips/{trip_id}/messages", json={"text": "xin chào"}).status_code == 501  # UC-01 chưa đăng ký

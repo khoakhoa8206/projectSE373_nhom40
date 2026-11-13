@@ -28,6 +28,11 @@ description: Xếp lịch trình nhiều ngày ở Huế từ TripProfile, chỉ
    không kết luận trời đẹp. Snapshot lỗi không phải dữ kiện để lập lịch an toàn.
 4. Với mỗi điểm, lấy `get_opening_hours(poi_id, date)`. `open_intervals=[]` là đóng; `null` là chưa biết;
    phút tính từ 00:00. Giờ đóng/mở và nghỉ trưa đều phải chứa TRỌN slot. Không tự hiểu cú pháp chưa hỗ trợ.
+   Với mỗi POI/ngày dự kiến, gọi `check_restricted_area(poi_id, date)`; gom các tra cứu độc lập cùng lượt.
+   Nếu `inside=true`, loại điểm khỏi lịch và chọn điểm khác.
+   Nếu `status=not_found` hoặc tool báo lỗi, không coi điểm đó là đã qua kiểm tra.
+   `inside=false` chỉ nghĩa là không thuộc vùng đang hiệu lực trong DB đã nạp,
+   không chứng nhận an toàn hoặc pháp lý; tool không kiểm toàn tuyến đường.
 5. Với mỗi cặp điểm liên tiếp cùng ngày, lấy `get_travel_time` đúng hướng và mode.
    Cache hiện chỉ drive: không gọi là đi bộ/xe đạp; unavailable không phải 0. Thay điểm hoặc giảm số điểm nếu thiếu tuyến.
    Chừa travel sau slot trước; slot đầu ngày null/0. Chèn bữa ăn/nghỉ; không cho slot vượt ngày hay chồng giờ.
@@ -36,6 +41,10 @@ description: Xếp lịch trình nhiều ngày ở Huế từ TripProfile, chỉ
    Không lấp lịch bằng slot nghỉ dài: kết thúc ngày sớm là được. Ngưỡng đi bộ có dữ liệu 3/6/10 km; đây là policy dự án, không phải khuyến cáo sức khoẻ.
    Mưa lớn: tổng thời gian ở điểm ngoài trời + điểm tham quan chưa rõ indoor/outdoor ≤120 phút/ngày,
    không lách bằng chia nhỏ slot.
+   Riêng Huế tháng 9–12 (mùa lũ chính vụ có nguồn trong `data/manifest.md`), nếu dự báo hợp lệ là
+   heavy_rain hoặc precip_mm ≥50: không xếp slot ngoài trời hay POI có tags river/riverside/boat_trip,
+   kể cả slot ≤120 phút. Dùng tags từ tool, không suy ra từ tên/activity hoặc tự gắn tag.
+   Chỉ tháng mùa lũ không đủ kết luận đang mưa/lũ; thiếu dự báo không được coi là trời đẹp.
    Không lặp POI hoặc xếp Đại Nội cùng các điểm con như những vé/chuyến riêng chỉ để đủ lịch.
 7. Giá chưa biết hoặc đơn vị vé/nhóm chưa tương thích: null/unverified. `free` chỉ khi nguồn xác nhận 0.
    Giá vé dữ liệu là giá/người: cost_vnd = ticket_price_vnd × số người trong đoàn (code tính lại khi nộp);
@@ -45,6 +54,8 @@ description: Xếp lịch trình nhiều ngày ở Huế từ TripProfile, chỉ
    `note` phải nói rõ giờ/giá/khả năng đi bộ chưa xác minh. Slot nghỉ: poi_id=null, cost_vnd=null,
    cost_source=unverified, hours_status=not_applicable; không gắn nghỉ với một POI bịa.
 9. Nếu có violations: sửa nguyên nhân (giờ/địa điểm/quá tải/giá/route), không che lỗi bằng đổi nhãn.
+   Nếu có `user_feedback` từ bước duyệt: sửa theo yêu cầu người dùng nhưng vẫn giữ mọi kiểm chứng/ràng buộc;
+   không coi feedback là quyền bỏ validator hoặc tự đổi dữ kiện. Yêu cầu sửa vẫn tính trong tổng tối đa 4 vòng.
    Ưu tiên sửa slot bị lỗi, giữ điểm/ngày/slot đã đúng; không xây lại toàn lịch ở mỗi vòng sửa.
    `verified_context.previous_facts` đã chứa kết quả giờ/travel cho bản trước, kể cả unknown: dùng lại,
    không hỏi lại với hy vọng unknown tự thành known. Chỉ tra cứu thêm khi thật sự thay điểm/chặng/ngày.

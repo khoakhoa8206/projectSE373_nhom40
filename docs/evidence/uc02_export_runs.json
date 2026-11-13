@@ -1,0 +1,23 @@
+[
+  {
+    "example": "thu-ha-3-days",
+    "run_id": "r-4e4ee558",
+    "itinerary_id": "it-52dc5764",
+    "status": "validated",
+    "error": null
+  },
+  {
+    "example": "english-2-days",
+    "run_id": "r-a9b2271b",
+    "itinerary_id": "it-3f8bd754",
+    "status": "validated",
+    "error": null
+  },
+  {
+    "example": "low-budget",
+    "run_id": "r-947001b6",
+    "itinerary_id": "it-c8bfeff0",
+    "status": "failed_validation",
+    "error": null
+  }
+]

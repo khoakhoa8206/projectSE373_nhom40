@@ -3,10 +3,12 @@ import { api, type ApiError, type Poi, type User } from "./api";
 import Home from "./pages/Home";
 import PoiPage from "./pages/Poi";
 import { PlanPage, TripsPage } from "./pages/Plan";
+import ProfilePage from "./pages/Profile";
 import TripPage from "./pages/Trip";
 import { CreditsPage, MemoryPage, NarratePage, VerifyPage } from "./pages/Tools";
+import { Empty } from "./ui";
 
-const NAV = [["/", "Khám phá"], ["/plan", "Lập lịch"], ["/trips", "Chuyến đi"], ["/narrate", "Thuyết minh"], ["/memory", "Bộ nhớ"], ["/verify", "Kiểm chứng"]];
+const NAV = [["/", "Khám phá"], ["/chat", "Hội thoại"], ["/plan", "Lập lịch"], ["/trips", "Chuyến đi"], ["/narrate", "Thuyết minh"], ["/memory", "Bộ nhớ"], ["/verify", "Kiểm chứng"]];
 const ACCOUNT_NOTE: Record<string, string> = {
   "u-ha": "Đã có chuyến 3 ngày được duyệt, sự kiện và bộ nhớ",
   "u-minh": "Có lịch trình đang chờ bạn duyệt",
@@ -65,6 +67,9 @@ export default function App() {
   const parts = path.split("/").filter(Boolean);
   let page;
   if (parts[0] === "poi" && parts[1]) page = <PoiPage key={parts[1]} id={parts[1]} shell={shell} />;
+  else if (parts[0] === "chat") page = user
+    ? <ProfilePage key={user.user_id} user={user} onExpired={askLogin} />
+    : <div className="wrap page"><Empty title="Đăng nhập để trò chuyện với agent"><button className="primary" onClick={askLogin}>Đăng nhập</button></Empty></div>;
   else if (parts[0] === "plan") page = <PlanPage shell={shell} preset={new URLSearchParams(query).get("text") ?? ""} />;
   else if (parts[0] === "trips" && parts[1]) page = <TripPage key={parts[1]} id={parts[1]} run={new URLSearchParams(query).get("run")} shell={shell} />;
   else if (parts[0] === "trips") page = <TripsPage shell={shell} />;
