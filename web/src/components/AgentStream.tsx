@@ -54,7 +54,9 @@ export default function AgentStream({ runId, onInterrupt, onDone, onError }: {
           if (seen.has(e.lastEventId)) return;
           seen.add(e.lastEventId);
         }
-        const ev: StreamEvent = { ...JSON.parse(e.data), kind };
+        const raw = JSON.parse(e.data);
+        // SSE của P1 gửi thẳng payload ở interrupt và không có node/ts ở done
+        const ev: StreamEvent = { ...raw, kind, node: raw.node ?? "workflow", ts: raw.ts ?? "", payload: kind === "interrupt" ? raw.payload ?? raw : raw.payload };
         setEvents((xs) => [...xs, ev]);
         if (kind === "interrupt" || kind === "done" || kind === "error") es.close();
         if (kind === "interrupt") {
@@ -83,7 +85,7 @@ export default function AgentStream({ runId, onInterrupt, onDone, onError }: {
         {events.map((e, i) => (
           <li key={i} className={e.kind === "error" ? "err" : undefined}>
             <time>{e.ts.slice(11, 19)}</time> <b>{e.node}</b> · {KIND_TEXT[e.kind]}
-            {e.tool && ` · ${e.tool}`}
+            {(e.tool ?? e.name) && ` · ${e.tool ?? e.name}`}
             {e.duration_ms != null && ` · ${e.duration_ms} ms`}
             {e.kind === "error" && e.payload != null && ` · ${typeof e.payload === "string" ? e.payload : JSON.stringify(e.payload)}`}
           </li>

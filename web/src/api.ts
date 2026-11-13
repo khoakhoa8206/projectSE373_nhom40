@@ -2,7 +2,47 @@
 
 export type User = { user_id: string; display_name: string; preferred_lang: "vi" | "en" };
 
-export type Poi = { poi_id: string; name_vi: string; category: "attraction" | "food" | "lodging"; lat: number; lon: number };
+export type PoiImage = { file: string; illustrative: boolean; title: string; author: string; license: string; license_url: string; source_url: string };
+
+export type Poi = {
+  poi_id: string; name_vi: string; name_en: string | null; category: "attraction" | "food" | "lodging"; lat: number; lon: number;
+  opening_hours: string | null; ticket_price_vnd: number | null; source_url: string; license: string; verified_at: string;
+  image: PoiImage | null; has_story?: boolean;
+};
+
+export type PoiDetail = Poi & {
+  about: { lang: "vi" | "en"; title: string; section: string; text: string; doc_id: string; source_url: string; license: string }[];
+  nearby: { poi_id: string; name_vi: string; category: string; minutes: number }[];
+};
+
+export type Claim = {
+  claim_type: "opening_hours" | "price" | "festival_date" | "weather" | "distance"; claim_text: string; target_id?: string;
+  status: "verified" | "unverified" | "contradicted"; source_url: string | null; verified_at: string | null; corrected_text: string | null;
+};
+
+export type Finding = { slot_ref: string | null; severity: "low" | "medium" | "high"; rule: string; message: string; suggestion: string | null };
+export type Report = { report_id: number; round: number; reviewer: "local_expert" | "budget" | "safety"; verdict: "approve" | "request_changes"; findings: Finding[] };
+export type TripEvent = { event_id: string; day_index: number; event_type: string; slot_id: string | null; amount_vnd: number | null; payload: string };
+export type Journal = { scope: "day" | "trip"; day_index: number | null; lang: "vi" | "en"; content: { summary: string; highlights: { text: string }[] }; event_ids: string[]; total_spent_vnd: number; tokens_before: number | null; tokens_after: number | null; run_id: string };
+export type RunRow = { run_id: string; uc: string; status: string; started_at: string; latency_ms: number | null; tokens_in: number; tokens_out: number };
+
+export type TripDetail = {
+  trip: { trip_id: string; status: string };
+  profile: (TripProfile & { hard_constraints: string[]; route: string }) | null;
+  pending: InterruptPayload | null;
+  itinerary: Itinerary | null;
+  claims: Claim[];
+  review: { reports: Report[]; coordination: { ts: string; from: string; to: string; message: string }[] };
+  events: TripEvent[];
+  journal: Journal[];
+  runs: RunRow[];
+  running: boolean;
+};
+
+export type TripRow = { trip_id: string; status: string; start_date: string | null; end_date: string | null; request: string | null; waiting: number | null; adults: number | null; budget_total_vnd: number | null };
+export type MemoryRow = { memory_id: string; kind: string; value: string; sensitivity: "normal" | "sensitive"; created_at: string; expires_at: string };
+export type Citation = { doc_id: string; section: string; source_url: string; quote: string };
+export type Narration = { text: string; citations: Citation[]; out_of_kb: boolean; run_id: string };
 
 export type TripProfile = {
   start_date: string;
@@ -11,7 +51,7 @@ export type TripProfile = {
   children: { age: number }[];
   budget_total_vnd: number | null;
   interests: string[];
-  pace: "relaxed" | "moderate" | "packed";
+  pace: "relaxed" | "moderate" | "packed" | null;
   language: "vi" | "en";
   mobility_notes: string | null;
 };
@@ -26,6 +66,7 @@ export type Slot = {
   activity: string;
   travel_minutes_from_prev: number | null;
   cost_vnd: number | null;
+  progress?: "planned" | "done" | "skipped";
   cost_source: "tool" | "unverified" | "free";
   hours_status: "verified" | "unverified" | "not_applicable";
   note: string | null;
@@ -43,18 +84,6 @@ export type Itinerary = {
   slots: Slot[];
   violations: { violation_id: number; slot_id: string | null; rule: string; severity: string; message: string }[];
 };
-
-export type SavedMemory = {
-  memory_id: string;
-  kind: "food_like" | "food_dislike" | "allergy" | "dietary" | "pace" | "interest" | "visited_city" | "other";
-  value: string;
-  sensitivity: "normal" | "sensitive";
-  source_trip_id: string | null;
-  created_at: string;
-  expires_at: string;
-};
-
-export type MemoryList = { items: SavedMemory[]; sensitive_consent: boolean };
 
 export type PlanResult = { run_id: string; itinerary_id: string | null; status: string; error: string | null };
 
@@ -83,19 +112,19 @@ export class ApiError extends Error {
 type Detail = string | { loc: (string | number)[]; msg: string }[] | { error?: string; run_id?: string } | undefined;
 
 function describe(status: number, detail: Detail): string {
-  if (status === 401) return "Phiên đã hết, hãy chọn lại người dùng.";
+  if (status === 401) return "Bạn cần đăng nhập bằng một tài khoản demo.";
   if (Array.isArray(detail)) return "Hồ sơ chưa hợp lệ: " + detail.map((d) => `${d.loc.slice(1).join(".")}: ${d.msg}`).join("; ");
   if (typeof detail === "string") return detail;
   if (detail?.error) return `Agent gặp lỗi: ${detail.error}`;
   return `Máy chủ lỗi (HTTP ${status}): backend chưa chạy hoặc gặp lỗi, xem log ở terminal chạy backend.`;
 }
 
-/** Gọi /api/<path>. Có `init` thì mặc định POST. Lỗi nào cũng thành ApiError với thông báo tiếng Việt đọc được. */
+/** Gọi /api/<path>. Có `json` thì POST. Lỗi nào cũng thành ApiError với thông báo tiếng Việt đọc được. */
 export async function api<T>(path: string, init?: { method?: "POST" | "PATCH" | "DELETE"; json?: unknown }): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
-      method: init ? (init.method ?? "POST") : "GET",
+      method: init?.method ?? (init ? "POST" : "GET"),
       headers: init?.json === undefined ? undefined : { "Content-Type": "application/json" },
       body: init?.json === undefined ? undefined : JSON.stringify(init.json),
     });
@@ -129,11 +158,12 @@ export type StreamEvent = {
   node: string;
   ts: string;
   tool?: string;
+  name?: string | null; // SSE của P1 đặt tên tool ở name
   duration_ms?: number;
   payload?: unknown;
 };
 
 /** POST /api/trips/{trip_id}/resume: graph chạy tiếp từ điểm dừng, trả run_id mới để mở stream. */
 export function resume(tripId: string, body: { approval_id: string; decision: Decision; response: unknown }) {
-  return api<{ run_id: string }>(`/trips/${tripId}/resume`, { json: body });
+  return api<{ run_id: string }>(`/trips/${tripId}/resume?background=true`, { json: body });
 }

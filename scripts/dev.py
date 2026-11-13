@@ -10,7 +10,7 @@ SERVICES = [
     ("mock-weather", "mocks/mock_weather/app.py",
      [sys.executable, "-m", "uvicorn", "mocks.mock_weather.app:app", "--port", "8081"]),
     ("backend", "agent/src/api/server.py",
-     [sys.executable, "-m", "uvicorn", "agent.src.api.server:app", "--reload", "--port", "8000"]),
+     [sys.executable, "-m", "uvicorn", "fullstack.api:app", "--reload", "--port", "8000"]),
     ("web", "web/package.json", [shutil.which("npm") or "npm", "--prefix", "web", "run", "dev", "--", "--host"]),
 ]  # fmt: skip
 

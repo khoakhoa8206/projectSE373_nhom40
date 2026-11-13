@@ -1,98 +1,136 @@
-import { useEffect, useState, type FormEvent } from "react";
-import {
-  api, resume, type ApiError, type Decision, type InterruptPayload, type Itinerary, type PlanResult, type Poi, type Slot, type TripProfile, type User,
-} from "./api";
-import AgentStream from "./components/AgentStream";
-import ApprovalCard from "./components/ApprovalCard";
-import { distanceM, nearestPoi, useSessionLocation, type Coords } from "./location";
-import MapView, { DAY_COLORS } from "./MapView";
-import JournalPage from "./pages/Journal";
-import Memory from "./pages/Memory";
-import Narrate from "./pages/Narrate";
+import { useCallback, useEffect, useState } from "react";
+import { api, type ApiError, type Poi, type User } from "./api";
+import Home from "./pages/Home";
+import PoiPage from "./pages/Poi";
+import { PlanPage, TripsPage } from "./pages/Plan";
+import TripPage from "./pages/Trip";
+import { CreditsPage, MemoryPage, NarratePage, VerifyPage } from "./pages/Tools";
 
-const USER_KEY = "tourguide.user";
-const NO_SLOTS: Slot[] = [];
-const INTERESTS = [["history", "Lịch sử"], ["food", "Ẩm thực"], ["culture", "Văn hoá"], ["nature", "Thiên nhiên"], ["shopping", "Mua sắm"]] as const;
+const NAV = [["/", "Khám phá"], ["/plan", "Lập lịch"], ["/trips", "Chuyến đi"], ["/narrate", "Thuyết minh"], ["/memory", "Bộ nhớ"], ["/verify", "Kiểm chứng"]];
+const ACCOUNT_NOTE: Record<string, string> = {
+  "u-ha": "Đã có chuyến 3 ngày được duyệt, sự kiện và bộ nhớ",
+  "u-minh": "Có lịch trình đang chờ bạn duyệt",
+  "u-emma": "English, đã có chuyến 2 ngày được duyệt",
+};
 
-// localStorage chỉ để nhớ người dùng đã chọn; có thể bị chặn (chế độ riêng tư) nên luôn bọc try/catch.
-function loadUser(): User | null {
-  try {
-    return JSON.parse(localStorage.getItem(USER_KEY) ?? "null");
-  } catch {
-    return null;
-  }
+export type Shell = { user: User | null; pois: Poi[]; llm: boolean; askLogin: () => void };
+
+function useHash() {
+  const [hash, setHash] = useState(location.hash.slice(1) || "/");
+  useEffect(() => {
+    const on = () => {
+      setHash(location.hash.slice(1) || "/");
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  return hash;
 }
-
-function saveUser(u: User | null) {
-  try {
-    if (u) localStorage.setItem(USER_KEY, JSON.stringify(u));
-    else localStorage.removeItem(USER_KEY);
-  } catch {
-    /* bỏ qua */
-  }
-}
-
-const vnd = (n: number) => `${n.toLocaleString("vi-VN")} đ`;
-const dayLabel = (d: string) => new Date(`${d}T00:00`).toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit" });
-
-function addDays(d: string, n: number) {
-  const t = new Date(`${d}T00:00Z`);
-  if (isNaN(t.getTime())) return undefined;
-  t.setUTCDate(t.getUTCDate() + n);
-  return t.toISOString().slice(0, 10);
-}
-
-// Chuyển trang bằng state đơn giản (không dùng router): UC-02 lịch trình, UC-03 thuyết minh, UC-09 nhật ký, UC-07 bộ nhớ.
-type Page = "plan" | "narrate" | "journal" | "memory";
-const PAGES: [Page, string][] = [["plan", "Lịch trình"], ["narrate", "Thuyết minh"], ["journal", "Nhật ký"], ["memory", "Bộ nhớ"]];
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(loadUser);
-  const [page, setPage] = useState<Page>("plan");
-  const pick = (u: User | null) => {
-    saveUser(u);
+  const hash = useHash();
+  const [users, setUsers] = useState<User[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [pois, setPois] = useState<Poi[]>([]);
+  const [llm, setLlm] = useState(true);
+  const [login, setLogin] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([api<User[]>("/users"), api<{ user_id: string | null }>("/ui/me"), api<Poi[]>("/ui/catalog"), api<{ llm: boolean }>("/ui/meta")])
+      .then(([all, me, catalog, meta]) => {
+        setUsers(all);
+        setUser(all.find((u) => u.user_id === me.user_id) ?? null);
+        setPois(catalog);
+        setLlm(meta.llm);
+      })
+      .catch((e: ApiError) => setError(e.message));
+  }, []);
+
+  const askLogin = useCallback(() => setLogin(true), []);
+  async function choose(u: User) {
+    await api("/session", { json: { user_id: u.user_id } });
     setUser(u);
-    setPage("plan");
-  };
+    setLogin(false);
+  }
+  async function logout() {
+    await api("/ui/logout", { method: "POST" });
+    setUser(null);
+    location.hash = "/";
+  }
+
+  const shell: Shell = { user, pois, llm, askLogin };
+  const [path, query] = hash.split("?");
+  const parts = path.split("/").filter(Boolean);
+  let page;
+  if (parts[0] === "poi" && parts[1]) page = <PoiPage key={parts[1]} id={parts[1]} shell={shell} />;
+  else if (parts[0] === "plan") page = <PlanPage shell={shell} preset={new URLSearchParams(query).get("text") ?? ""} />;
+  else if (parts[0] === "trips" && parts[1]) page = <TripPage key={parts[1]} id={parts[1]} run={new URLSearchParams(query).get("run")} shell={shell} />;
+  else if (parts[0] === "trips") page = <TripsPage shell={shell} />;
+  else if (parts[0] === "narrate") page = <NarratePage shell={shell} preset={new URLSearchParams(query).get("poi")} />;
+  else if (parts[0] === "memory") page = <MemoryPage shell={shell} />;
+  else if (parts[0] === "verify") page = <VerifyPage shell={shell} />;
+  else if (parts[0] === "credits") page = <CreditsPage pois={pois} />;
+  else page = <Home shell={shell} />;
+
+  const active = (to: string) => (to === "/" ? parts.length === 0 || parts[0] === "poi" : parts[0] === to.slice(1));
   return (
     <div className="app">
       <header className="top">
-        <h1>Tour Guide Huế</h1>
-        {user && (
-          <nav className="tabs">
-            {PAGES.map(([p, label]) => (
-              <button key={p} className={page === p ? "active" : undefined} onClick={() => setPage(p)}>
-                {label}
-              </button>
-            ))}
+        <div className="wrap top-row">
+          <a className="logo" href="#/">Cố Đô <span>Guide</span></a>
+          <nav className="nav-main" aria-label="Điều hướng chính">
+            {NAV.map(([to, label]) => <a key={to} href={`#${to}`} aria-current={active(to) ? "page" : undefined}>{label}</a>)}
           </nav>
-        )}
-        {user && (
-          <span className="who">
-            {user.display_name}
-            <button className="link" onClick={() => pick(null)}>
-              Đổi người dùng
-            </button>
-          </span>
-        )}
+          {user ? (
+            <div className="account">
+              <span>{user.display_name.replace(/ \((hư cấu|fictional)\)/, "")}</span>
+              <button className="ghost" onClick={logout}>Đăng xuất</button>
+            </div>
+          ) : <button className="primary" onClick={askLogin}>Đăng nhập</button>}
+        </div>
       </header>
       <OfflineBanner />
-      {!user ? (
-        <UserPicker onPick={pick} />
-      ) : page === "memory" ? (
-        <Memory onExpired={() => pick(null)} />
-      ) : page === "narrate" ? (
-        <Narrate user={user} onExpired={() => pick(null)} />
-      ) : page === "journal" ? (
-        <JournalPage user={user} onExpired={() => pick(null)} />
-      ) : (
-        <PlanScreen user={user} onExpired={() => pick(null)} />
+      {error && <p className="banner-error" role="alert">{error}</p>}
+      <main>{page}</main>
+      <footer className="foot">
+        <div className="wrap foot-row">
+          <div>
+            <b>Cố Đô Guide</b>
+            <p className="muted small">Đồ án SE373, đề tài 08. Người dùng và lịch sử chuyến đi trong bản demo là hư cấu.</p>
+            {!llm && <p className="small"><b>Đang chạy không có khoá LLM:</b> planner là bản giả, thuyết minh và nhật ký chưa dùng được. Graph, tool, validator, RAG và bộ nhớ là code thật của nhóm.</p>}
+          </div>
+          <p className="muted small">
+            Bản đồ <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>.
+            Dữ liệu địa điểm OSM và Wikivoyage (CC BY-SA 4.0). Thời tiết: dự báo mock của nhóm; khi bật nguồn thứ hai:{" "}
+            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather data by Open-Meteo.com</a> (CC BY 4.0).{" "}
+            <a href="#/credits">Nguồn ảnh và giấy phép</a>
+          </p>
+        </div>
+      </footer>
+      <nav className="nav-bottom" aria-label="Điều hướng trên điện thoại">
+        {NAV.map(([to, label]) => <a key={to} href={`#${to}`} aria-current={active(to) ? "page" : undefined}>{label}</a>)}
+      </nav>
+      {login && (
+        <div className="modal" role="dialog" aria-modal="true" aria-label="Chọn tài khoản demo" onClick={() => setLogin(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h2>Chọn tài khoản demo</h2>
+            <p className="muted">Ba người dùng hư cấu, không có dữ liệu thật và không cần mật khẩu.</p>
+            {users.map((u) => (
+              <button key={u.user_id} className="account-card" onClick={() => choose(u)}>
+                <b>{u.display_name}</b>
+                <small>{ACCOUNT_NOTE[u.user_id]}</small>
+              </button>
+            ))}
+            <button className="ghost" onClick={() => setLogin(false)}>Đóng</button>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-/** PWA vẫn mở được khi mất mạng (khung app trong cache) nhưng agent, lịch trình, bản đồ cần mạng: báo ngay, bằng chữ. */
 function OfflineBanner() {
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
@@ -105,382 +143,5 @@ function OfflineBanner() {
       window.removeEventListener("offline", down);
     };
   }, []);
-  return online ? null : (
-    <p className="offline" role="status">
-      Thiết bị đang mất mạng. Agent, lịch trình và bản đồ cần mạng; bật mạng rồi thử lại.
-    </p>
-  );
-}
-
-/** GET /api/users → POST /api/session (server lưu user_id vào cookie, không gửi user_id trong body request khác). */
-function UserPicker({ onPick }: { onPick: (u: User) => void }) {
-  const [users, setUsers] = useState<User[] | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    api<User[]>("/users").then(setUsers, (e: ApiError) => setError(e.message));
-  }, []);
-
-  async function choose(u: User) {
-    setError("");
-    try {
-      await api("/session", { json: { user_id: u.user_id } });
-      onPick(u);
-    } catch (e) {
-      setError((e as ApiError).message);
-    }
-  }
-
-  return (
-    <main className="picker">
-      <h2>Chọn người dùng</h2>
-      <p className="muted">Bản demo có 3 người dùng hư cấu, không dùng dữ liệu người thật.</p>
-      {error && <p className="error" role="alert">{error}</p>}
-      {!users && !error && <p className="muted">Đang tải…</p>}
-      <div className="users">
-        {users?.map((u) => (
-          <button key={u.user_id} onClick={() => choose(u)}>
-            {u.display_name}
-            <small>{u.preferred_lang === "en" ? "English" : "Tiếng Việt"}</small>
-          </button>
-        ))}
-      </div>
-    </main>
-  );
-}
-
-type Form = {
-  start_date: string;
-  end_date: string;
-  adults: number;
-  children: string;
-  budget: string;
-  interests: string[];
-  pace: TripProfile["pace"];
-  language: TripProfile["language"];
-  mobility_notes: string;
-};
-
-function toProfile(f: Form): TripProfile {
-  return {
-    start_date: f.start_date,
-    end_date: f.end_date,
-    adults: f.adults,
-    children: f.children.split(/[,\s]+/).filter(Boolean).map((a) => ({ age: Number(a) })),
-    budget_total_vnd: f.budget ? Number(f.budget) : null,
-    interests: f.interests,
-    pace: f.pace,
-    language: f.language,
-    mobility_notes: f.mobility_notes.trim() || null,
-  };
-}
-
-type Phase = { kind: "idle" | "done" } | { kind: "running"; step: string; since: number } | { kind: "error"; message: string };
-
-/** UC-02: form hồ sơ → POST /trips → POST /plan → tiến trình agent (SSE) → lịch trình theo ngày + bản đồ → người duyệt (interrupt). */
-function PlanScreen({ user, onExpired }: { user: User; onExpired: () => void }) {
-  const [form, setForm] = useState<Form>({
-    start_date: "2026-11-25",
-    end_date: "2026-11-27",
-    adults: 2,
-    children: "",
-    budget: "8000000",
-    interests: ["history", "food"],
-    pace: "moderate",
-    language: user.preferred_lang,
-    mobility_notes: "",
-  });
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
-  const [itinerary, setItinerary] = useState<Itinerary | null>(null);
-  const [tripId, setTripId] = useState<string | null>(null);
-  const [runId, setRunId] = useState<string | null>(null);
-  const [pending, setPending] = useState<InterruptPayload | null>(null); // graph đang dừng chờ người dùng
-  const [sending, setSending] = useState(false);
-  const location = useSessionLocation();
-  const [pois, setPois] = useState<Poi[]>([]);
-  const [picked, setPicked] = useState<Poi | null>(null); // điểm tự chọn khi không có vị trí
-  const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
-
-  useEffect(() => {
-    api<Poi[]>("/pois").then(setPois, () => {}); // không tải được POI thì bản đồ vẫn dùng được
-  }, []);
-
-  async function loadItinerary(id: string) {
-    try {
-      setItinerary(await api<Itinerary>(`/trips/${id}/itinerary`));
-      setPhase({ kind: "done" });
-    } catch (err) {
-      const e = err as ApiError;
-      if (e.status === 401) return onExpired();
-      setPhase({ kind: "error", message: e.message });
-    }
-  }
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setItinerary(null);
-    setRunId(null);
-    setPending(null);
-    const since = Date.now();
-    try {
-      setPhase({ kind: "running", step: "Đang lưu hồ sơ…", since });
-      const { trip_id } = await api<{ trip_id: string }>("/trips", { json: toProfile(form) });
-      setTripId(trip_id);
-      setPhase({ kind: "running", step: "Agent đang lập lịch trình: tra giờ mở cửa, thời gian di chuyển, thời tiết…", since });
-      const plan = await api<PlanResult>(`/trips/${trip_id}/plan`, { method: "POST" });
-      setRunId(plan.run_id); // tiến trình hiện qua AgentStream; xong thì onDone tải lịch trình
-      if (plan.itinerary_id) await loadItinerary(trip_id); // backend chạy đồng bộ thì đã có lịch trình ngay
-    } catch (err) {
-      const e = err as ApiError;
-      if (e.status === 401) return onExpired();
-      const id = (e.detail as { run_id?: string } | undefined)?.run_id; // /plan lỗi vẫn trả run_id để xem tiến trình
-      if (id) setRunId(id);
-      setPhase({ kind: "error", message: e.message });
-    }
-  }
-
-  function onInterrupt(p: InterruptPayload) {
-    setPending(p);
-    setPhase({ kind: "done" });
-    if (p.kind === "itinerary_approval" && tripId) loadItinerary(tripId); // người duyệt cần thấy lịch trình
-  }
-
-  async function decide(decision: Decision, response: unknown) {
-    if (!pending || !tripId) return;
-    setSending(true);
-    try {
-      const res = await resume(tripId, { approval_id: pending.approval_id, decision, response });
-      setPending(null);
-      setRunId(res.run_id);
-      setPhase({ kind: "running", step: "Agent đang chạy tiếp…", since: Date.now() });
-    } catch (err) {
-      const e = err as ApiError;
-      if (e.status === 401) return onExpired();
-      setPhase({ kind: "error", message: e.message });
-    } finally {
-      setSending(false);
-    }
-  }
-
-  const running = phase.kind === "running";
-  return (
-    <main className="plan">
-      <section className="side">
-        <form onSubmit={submit}>
-          <fieldset disabled={running} className="grid">
-            <legend>Hồ sơ chuyến đi Huế</legend>
-            <label>
-              Ngày đi
-              <input type="date" required value={form.start_date} onChange={(e) => set("start_date", e.target.value)} />
-            </label>
-            <label>
-              Ngày về <small>(tối đa 5 ngày)</small>
-              <input type="date" required min={form.start_date} max={addDays(form.start_date, 4)} value={form.end_date}
-                onChange={(e) => set("end_date", e.target.value)} />
-            </label>
-            <label>
-              Người lớn
-              <input type="number" required min={1} max={6} value={form.adults} onChange={(e) => set("adults", Number(e.target.value))} />
-            </label>
-            <label>
-              Tuổi trẻ em <small>(cách nhau dấu phẩy)</small>
-              <input inputMode="numeric" pattern="[0-9 ,]*" placeholder="vd 6, 9" value={form.children}
-                onChange={(e) => set("children", e.target.value)} />
-            </label>
-            <label>
-              Ngân sách cả chuyến (VND)
-              <input type="number" min={1} value={form.budget} onChange={(e) => set("budget", e.target.value)} />
-            </label>
-            <label>
-              Nhịp độ
-              <select value={form.pace} onChange={(e) => set("pace", e.target.value as Form["pace"])}>
-                <option value="relaxed">Thong thả</option>
-                <option value="moderate">Vừa phải</option>
-                <option value="packed">Dày đặc</option>
-              </select>
-            </label>
-            <fieldset className="wide checks">
-              <legend>Sở thích</legend>
-              {INTERESTS.map(([v, label]) => (
-                <label key={v}>
-                  <input type="checkbox" checked={form.interests.includes(v)}
-                    onChange={(e) => set("interests", e.target.checked ? [...form.interests, v] : form.interests.filter((x) => x !== v))} />
-                  {label}
-                </label>
-              ))}
-            </fieldset>
-            <label>
-              Ngôn ngữ
-              <select value={form.language} onChange={(e) => set("language", e.target.value as Form["language"])}>
-                <option value="vi">Tiếng Việt</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-            <label>
-              Ghi chú đi lại
-              <input placeholder="vd có người cao tuổi, ít đi bộ" value={form.mobility_notes} onChange={(e) => set("mobility_notes", e.target.value)} />
-            </label>
-            <button type="submit" className="wide primary">
-              {running ? "Đang lập lịch trình…" : "Lập lịch trình"}
-            </button>
-          </fieldset>
-        </form>
-
-        {phase.kind === "running" && (
-          <div className="loading" role="status">
-            <span className="spinner" aria-hidden />
-            <div>
-              {phase.step} <b><Elapsed since={phase.since} /></b>
-              <small>Thường mất 2–3 phút, đừng đóng trang.</small>
-            </div>
-          </div>
-        )}
-        {phase.kind === "error" && <p className="error" role="alert">{phase.message}</p>}
-        {itinerary && <ItineraryView it={itinerary} />}
-        {pending && <ApprovalCard payload={pending} busy={sending} onSubmit={decide} />}
-        {runId && (
-          <AgentStream runId={runId} onInterrupt={onInterrupt} onDone={() => tripId && loadItinerary(tripId)}
-            onError={() => setPhase({ kind: "error", message: "Agent gặp lỗi, xem các bước bên dưới." })} />
-        )}
-      </section>
-      <section className="mapcol">
-        <MapView slots={itinerary?.slots ?? NO_SLOTS} pois={pois} here={location.coords ?? picked} />
-        <p className="muted small">Đường nét đứt nối các điểm theo thứ tự tham quan, không phải đường đi thực tế.</p>
-        <LocationCard location={location} pois={pois} picked={picked} onPick={setPicked} />
-      </section>
-    </main>
-  );
-}
-
-function Elapsed({ since }: { since: number }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const s = Math.floor((now - since) / 1000);
-  return <>{Math.floor(s / 60)}:{String(s % 60).padStart(2, "0")}</>;
-}
-
-function ItineraryView({ it }: { it: Itinerary }) {
-  const days = [...new Set(it.slots.map((s) => s.day_index))];
-  return (
-    <section className="itinerary">
-      <h2>Lịch trình</h2>
-      <p className={it.status === "validated" ? "ok" : "warn"}>
-        {it.status === "validated" ? `Đã qua validator sau ${it.planner_rounds} vòng` : `Còn vi phạm sau ${it.planner_rounds} vòng`}
-      </p>
-      <p>
-        Tổng chi phí đã có giá: <b>{it.total_cost_vnd === null ? "Chưa có giá xác minh" : vnd(it.total_cost_vnd)}</b>
-        {it.has_unpriced_item ? " + các mục chưa có giá" : ""}
-      </p>
-      <p className="hint">
-        Dữ liệu địa điểm: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors (ODbL)</a>
-        {" và "}<a href="https://en.wikivoyage.org/w/index.php?title=Hue&oldid=5384053" target="_blank" rel="noreferrer">Wikivoyage contributors</a>
-        {" ("}<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>{"). "}
-        Dữ liệu đã tuyển chọn/chuyển đổi; giờ, giá còn thiếu cần xác minh trước khi đi. Thời tiết: dự báo mock của nhóm; khi bật
-        nguồn thứ hai: <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather data by Open-Meteo.com</a>
-        {" ("}<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>{")."}
-      </p>
-      {it.violations.length > 0 && (
-        <ul className="violations">
-          {it.violations.map((v) => (
-            <li key={v.violation_id}>
-              [{v.rule}] {v.message}
-            </li>
-          ))}
-        </ul>
-      )}
-      {days.map((d) => {
-        const slots = it.slots.filter((s) => s.day_index === d);
-        return (
-          <div key={d} className="day">
-            <h3>
-              <span className="dot" style={{ background: DAY_COLORS[(d - 1) % DAY_COLORS.length] }} />
-              Ngày {d} · {dayLabel(slots[0].slot_date)}
-            </h3>
-            <ul>
-              {slots.map((s) => (
-                <SlotItem key={s.slot_id} s={s} />
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-    </section>
-  );
-}
-
-function SlotItem({ s }: { s: Slot }) {
-  return (
-    <li className="slot">
-      <div className="time">
-        {s.start_time}–{s.end_time}
-      </div>
-      <div>
-        <div className="title">{s.name_vi ?? "Tự do / nghỉ"}</div>
-        <div>{s.activity}</div>
-        <div className="tags">
-          {s.travel_minutes_from_prev != null && <span className="tag">{s.travel_minutes_from_prev} phút di chuyển</span>}
-          {s.cost_source === "tool" && s.cost_vnd != null && <span className="tag">{vnd(s.cost_vnd)}</span>}
-          {s.cost_source === "free" && <span className="tag">Miễn phí</span>}
-          {s.cost_source === "unverified" && <span className="tag warn">chưa có giá</span>}
-          {s.hours_status === "unverified" && <span className="tag warn">giờ mở cửa chưa xác minh</span>}
-          {s.hours_status === "verified" && <span className="tag ok">giờ mở cửa đã xác minh</span>}
-        </div>
-        {s.note && <div className="muted small">{s.note}</div>}
-      </div>
-    </li>
-  );
-}
-
-/** Giải thích mục đích TRƯỚC khi trình duyệt hỏi quyền; từ chối thì cho chọn điểm thủ công, app vẫn dùng bình thường. */
-function LocationCard({ location, pois, picked, onPick }: {
-  location: ReturnType<typeof useSessionLocation>;
-  pois: Poi[];
-  picked: Poi | null;
-  onPick: (p: Poi | null) => void;
-}) {
-  const { coords, request, error, asking, clear } = location;
-  const attractions = pois.filter((p) => p.category === "attraction").sort((a, b) => a.name_vi.localeCompare(b.name_vi, "vi"));
-  if (coords) return <Nearest coords={coords} poi={nearestPoi(coords, attractions)} onHide={clear} />;
-  return (
-    <div className="location" aria-live="polite">
-      <p className="small">
-        <b>Vị trí của bạn</b> dùng để tìm điểm tham quan gần bạn, chỉ dùng trong phiên này: không lưu lại, không gửi lên máy chủ,
-        đóng hoặc tải lại trang là mất.
-      </p>
-      {error && <p className="warn small" role="alert">{error}</p>}
-      <button onClick={request} disabled={asking}>
-        {asking ? "Đang lấy vị trí…" : "Tìm điểm gần tôi"}
-      </button>
-      {error && (
-        <label className="small">
-          Hoặc chọn điểm bạn đang ở
-          <select value={picked?.poi_id ?? ""} onChange={(e) => onPick(attractions.find((p) => p.poi_id === e.target.value) ?? null)}>
-            <option value="">-- chọn điểm --</option>
-            {attractions.map((p) => (
-              <option key={p.poi_id} value={p.poi_id}>{p.name_vi}</option>
-            ))}
-          </select>
-        </label>
-      )}
-    </div>
-  );
-}
-
-function Nearest({ coords, poi, onHide }: { coords: Coords; poi: Poi | null; onHide: () => void }) {
-  return (
-    <div className="location" aria-live="polite">
-      <p>
-        Đang hiện vị trí của bạn (sai số khoảng {coords.accuracy_m} m).{" "}
-        <button className="link" onClick={onHide}>Ẩn vị trí</button>
-      </p>
-      {poi && (
-        <p className="small">
-          Điểm tham quan gần bạn nhất: <b>{poi.name_vi}</b>, khoảng {(distanceM(coords, poi) / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} km đường chim bay.
-        </p>
-      )}
-    </div>
-  );
+  return online ? null : <p className="banner-error" role="status">Thiết bị đang mất mạng. Agent, lịch trình và bản đồ cần mạng; bật mạng rồi thử lại.</p>;
 }
