@@ -42,8 +42,10 @@ way["access"="no"](16.43,107.53,16.49,107.64);
   Way POI dùng **tâm bounding box**, node dùng toạ độ nguồn, Wikivoyage dùng listing point.
   Đây **không phải cổng vào được xác minh**; OSRM snap lên mạng đường, có thể cho tuyến tiếp cận chưa phù hợp thực địa.
   Lần cache hiện tại có 3 snap point lệch >100m, lớn nhất khoảng 334m: không dùng để dẫn đường tới đúng cổng.
-- `name_vi` ưu tiên name:vi rồi name; nếu nguồn không có dấu/tiếng Việt, không tự sửa thành dữ kiện mới.
-  Làng hương Thủy Xuân dùng name do name:vi bất nhất. Tags history/food/lodging là nhãn tuyển chọn;
+- `name_vi` ưu tiên name:vi rồi name. OSM chỉ có tên Latin không dấu, thiếu name:en, hoặc name:vi bất nhất (Làng
+  hương Thủy Xuân) thì dùng tên hiển thị trong `NAMES` của `prepare_hue_data.py`: nhóm chỉ thêm dấu/dịch tên, không
+  thêm dữ kiện; tên gốc giữ trong `osm_snapshot.json`; tên thương hiệu (Madam Thu, Loving Hut, Spice Viet) giữ nguyên.
+  Mọi POI có `name_en` để giao diện chế độ US hiện tên tiếng Anh. Tags history/food/lodging là nhãn tuyển chọn;
   vegetarian chỉ gắn khi OSM có diet:vegetarian=only hoặc diet:vegan=only.
 - Không suy ra is_outdoor/min_age/walking_level/avg_visit_minutes từ tên.
 - W8-P2-2 bổ sung tag `riverside` cho Thiên Mụ từ mô tả Vietnam Tourism, nguồn theo trường trong

@@ -47,6 +47,28 @@ OSM_POIS = [
     ("way", 1280445132, "hue-senna", "lodging"),
 ]
 ZONE_IDS = [1033694882, 1172668060, 1332926251, 1346325479, 1493416350]
+# Tên hiển thị (vi, en) khi OSM chỉ có tên Latin không dấu, thiếu name:en hoặc name:vi bất nhất. Chỉ thêm dấu/dịch tên,
+# không phải dữ kiện mới; tên gốc vẫn giữ trong osm_snapshot.json. Tên thương hiệu (Madam Thu, Loving Hut...) giữ nguyên.
+NAMES = {
+    "hue-chua-bao-quoc": ("Chùa Báo Quốc", "Bao Quoc Pagoda"),
+    "hue-chua-dieu-de": ("Chùa Diệu Đế", "Dieu De National Pagoda"),
+    "hue-vien-co-mat": ("Viện Cơ Mật - Tam Toà", "Co Mat Institute - Tam Toa"),
+    "hue-lang-huong-thuy-xuan": ("Làng hương Thủy Xuân", "Thuy Xuan Incense Village"),
+    "hue-bia-quoc-hoc": ("Trường Quốc Học Huế", "Quoc Hoc High School"),
+    "hue-madam-thu": ("Madam Thu", "Madam Thu"),
+    "hue-lac-thien": ("Lạc Thiện", "Lac Thien Restaurant"),
+    "hue-lac-thanh": ("Lạc Thanh", "Lac Thanh Restaurant"),
+    "hue-com-hen-hoa-dong": ("Cơm hến Hoa Đông", "Hoa Dong Clam Rice"),
+    "hue-san-may": ("Sân Mây Huế", "San May Hue"),
+    "hue-loving-hut": ("Loving Hut", "Loving Hut"),
+    "hue-lien-hoa": ("Quán chay Liên Hoa", "Lien Hoa Vegetarian Restaurant"),
+    "hue-spice-viet": ("Spice Viet", "Spice Viet"),
+    "hue-saigon-morin": ("Khách sạn Saigon Morin", "Hotel Saigon Morin"),
+    "hue-la-residence": ("La Résidence Huế", "La Residence Hue"),
+    "hue-silk-path": ("Khách sạn Silk Path Grand Huế", "Silk Path Grand Hue Hotel"),
+    "hue-senna": ("Khách sạn Senna Huế", "Senna Hue Hotel"),
+}
+ZONE_NAMES = {1493416350: "Bộ đội Biên phòng"}  # OSM name = "Vietnamese Border Guard"
 
 
 def write_csv(path, rows, fields):
@@ -77,9 +99,9 @@ def prepare(snapshot: Path):
         if tags.get("diet:vegetarian") == "only" or tags.get("diet:vegan") == "only":
             labels.append("vegetarian")
         # Không suy ra indoor/outdoor, walking_level hoặc thời lượng từ tên địa điểm.
-        display_name = tags["name"] if pid == "hue-lang-huong-thuy-xuan" else tags.get("name:vi", tags["name"])
-        row = POI(poi_id=pid, destination_id="hue", name_vi=display_name,
-                  name_en=tags.get("name:en"), category=category, lat=location["lat"], lon=location["lon"],
+        name_vi, name_en = NAMES.get(pid, (tags.get("name:vi", tags["name"]), tags.get("name:en")))
+        row = POI(poi_id=pid, destination_id="hue", name_vi=name_vi,
+                  name_en=name_en, category=category, lat=location["lat"], lon=location["lon"],
                   opening_hours=tags.get("opening_hours"), tags=labels,
                   source_url=f"https://www.openstreetmap.org/{kind}/{eid}", license="ODbL-1.0", verified_at=VERIFIED)
         rows.append(row.model_dump())
@@ -95,7 +117,7 @@ def prepare(snapshot: Path):
             raise ValueError(f"OSM way {eid} không phải polygon khép kín.")
         properties = {
             "zone_id": f"hue-osm-military-{eid}", "destination_id": "hue",
-            "name": e["tags"].get("name", f"Vùng landuse=military OSM {eid}"), "zone_type": "military",
+            "name": ZONE_NAMES.get(eid) or e["tags"].get("name", f"Vùng landuse=military OSM {eid}"), "zone_type": "military",
             "active_from": None, "active_to": None,
             "reason": "OSM gắn landuse=military: loại khỏi gợi ý du lịch; không phải xác nhận pháp lý thực địa.",
             "source_url": f"https://www.openstreetmap.org/way/{eid}", "license": "ODbL-1.0", "verified_at": VERIFIED,

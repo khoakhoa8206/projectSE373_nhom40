@@ -33,8 +33,8 @@ không coi ngày tải 25/10 là ngày bản đồ được cập nhật.
 |---|---|
 | osm_snapshot.json | e2b86d2e4cc6160ac67438affbfd752aacd11ccb53decf87d49318fc6c89fdc4 |
 | poi_images.csv | 9cf24d9b05bad0ae8c47379cd8c23d8fea087467f50cd6a8aa591464f3b1b60e |
-| poi.csv | da52d3e1818bba690e51d6da3144eb920b11c3de66a45b4abb599ca479324faf |
-| restricted_zones.geojson | b90942a95adb6c3743a749b98b5456b089a0bcd8de4f45d993d1d6fe739e2920 |
+| poi.csv | 83224641dedf68c78699e24d49a057d1514eb6786c42bb04c987eace1bf05a9b |
+| restricted_zones.geojson | 80f84305249443df8e5c6ff7214a210db87e6360973d1be457b1e64300be5cbe |
 | routing_provenance.json | 0a1b4bb9ff94a4843c0b5fab65ca3368e7b7bf5cfc0d97a3aded108d68d823db |
 | travel_matrix.csv | 8f9cf8ad2557e3239231551f6ea239a75bf13c43bfa72e46a005359c2a33dd2e |
 
