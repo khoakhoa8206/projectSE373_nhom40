@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { t } from "./i18n";
 
 /** Vị trí người dùng: chỉ nằm trong state React của phiên này (không localStorage, không gửi server, tải lại trang là mất).
  * Cần gửi lên server (vd chế độ "đang ở đây" của UC-03) thì chỉ gửi poi_id từ nearestPoi(), không gửi toạ độ. */
@@ -13,7 +14,8 @@ export function useSessionLocation() {
   const request = useCallback(() => {
     // Trình duyệt chỉ cho lấy vị trí qua HTTPS hoặc localhost; mở bằng IP mạng LAN trên điện thoại sẽ không có.
     if (!window.isSecureContext || !("geolocation" in navigator)) {
-      setError(window.isSecureContext ? "Trình duyệt không hỗ trợ định vị." : "Trình duyệt chỉ cho lấy vị trí khi mở trang qua HTTPS.");
+      setError(window.isSecureContext ? t("Trình duyệt không hỗ trợ định vị.", "This browser does not support location.")
+        : t("Trình duyệt chỉ cho lấy vị trí khi mở trang qua HTTPS.", "The browser only shares location over HTTPS."));
       return;
     }
     setAsking(true);
@@ -27,10 +29,10 @@ export function useSessionLocation() {
         setAsking(false);
         setError(
           e.code === e.PERMISSION_DENIED
-            ? "Bạn đã từ chối quyền vị trí. Muốn bật lại thì mở quyền trong cài đặt trình duyệt."
+            ? t("Bạn đã từ chối quyền vị trí. Muốn bật lại thì mở quyền trong cài đặt trình duyệt.", "Location permission was denied. Re-enable it in your browser settings.")
             : e.code === e.TIMEOUT
-              ? "Lấy vị trí quá lâu, hãy thử lại."
-              : "Không xác định được vị trí.",
+              ? t("Lấy vị trí quá lâu, hãy thử lại.", "Getting your location took too long, please try again.")
+              : t("Không xác định được vị trí.", "Could not determine your location."),
         );
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },

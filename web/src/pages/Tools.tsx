@@ -20,8 +20,7 @@ export function NarratePage({ shell, preset }: { shell: Shell; preset: string | 
   const [poiId, setPoiId] = useState(preset ?? "");
   const [question, setQuestion] = useState("");
   const [detail, setDetail] = useState(false);
-  const [lang, setLang] = useState<"vi" | "en">(getLang());
-  const [result, setResult] = useState<Narration | null>(null);
+  const [result, setResult] = useState<(Narration & { lang: "vi" | "en" }) | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const here = useSessionLocation();
@@ -33,7 +32,8 @@ export function NarratePage({ shell, preset }: { shell: Shell; preset: string | 
     setError("");
     setResult(null);
     try {
-      setResult(await api<Narration>("/narrate", { json: { question: q.trim() || null, poi_id: poi || null, lang, length: detail ? "detail" : "short" } }));
+      const lang = getLang(); // trả lời theo chế độ VN/US lúc bấm, không giữ lựa chọn cũ của trang
+      setResult({ ...(await api<Narration>("/narrate", { json: { question: q.trim() || null, poi_id: poi || null, lang, length: detail ? "detail" : "short" } })), lang });
     } catch (e) {
       setError((e as ApiError).message);
     } finally {
@@ -48,7 +48,7 @@ export function NarratePage({ shell, preset }: { shell: Shell; preset: string | 
     if (!result) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(result.text.replace(/\[[^\]]*§[^\]]*\]/g, ""));
-    u.lang = lang === "vi" ? "vi-VN" : "en-US";
+    u.lang = result.lang === "vi" ? "vi-VN" : "en-US";
     speechSynthesis.speak(u);
   }
   function hereNow() {
@@ -61,7 +61,7 @@ export function NarratePage({ shell, preset }: { shell: Shell; preset: string | 
   return (
     <div className="wrap page narrow">
       <h1>{t("Thuyết minh điểm tham quan", "Site narration")}</h1>
-      <p className="muted">{t("Trả lời theo ngôn ngữ bạn chọn, kèm trích dẫn. Kho tri thức không có thì hệ thống nói rõ.", "Answers in the language you pick, with citations. If the knowledge base has nothing, it says so.")}</p>
+      <p className="muted">{t("Trả lời bằng ngôn ngữ đang chọn (VN/US), kèm trích dẫn. Kho tri thức không có thì hệ thống nói rõ.", "Answers in the selected language (VN/US), with citations. If the knowledge base has nothing, it says so.")}</p>
       {!shell.llm && <p className="note small">{t("Thuyết minh cần khoá LLM. Thêm LLM_API_KEY vào file .env rồi khởi động lại.", "Narration needs an LLM key. Add LLM_API_KEY to .env and restart.")}</p>}
       <form className="stack" onSubmit={submit}>
         <label htmlFor="n-poi">{t("Địa điểm", "Place")}</label>
@@ -71,11 +71,6 @@ export function NarratePage({ shell, preset }: { shell: Shell; preset: string | 
         </select>
         <label htmlFor="n-q">{t("Câu hỏi", "Question")}</label>
         <input id="n-q" required={!poiId} maxLength={500} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={t("Ngọ Môn được xây năm nào?", "When was the Noon Gate built?")} />
-        <label htmlFor="n-lang">{t("Ngôn ngữ trả lời", "Answer language")}</label>
-        <select id="n-lang" value={lang} onChange={(e) => setLang(e.target.value as "vi" | "en")}>
-          <option value="vi">Tiếng Việt</option>
-          <option value="en">English</option>
-        </select>
         <label className="check"><input type="checkbox" checked={detail} onChange={(e) => setDetail(e.target.checked)} /> {t("Bản chi tiết", "Detailed version")}</label>
         <button className="primary" disabled={busy}>{busy ? t("Đang tìm...", "Searching...") : t("Hỏi", "Ask")}</button>
       </form>
