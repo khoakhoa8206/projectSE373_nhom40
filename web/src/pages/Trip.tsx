@@ -25,7 +25,9 @@ export default function TripPage({ id, run, shell }: { id: string; run: string |
   const load = useCallback(() => {
     api<TripDetail>(`/ui/trips/${id}`).then((x) => {
       setD(x);
-      if (x.running) setStream((s) => s ?? x.runs[0].run_id); // tải lại trang lúc agent đang chạy
+      // quay lại trang lúc agent đang chạy nền: nối lại đúng lượt đang chạy (runs[0] có thể là lượt kiểm chứng vừa xong)
+      const live = x.runs.find((r) => r.status === "running");
+      if (live) setStream((s) => s ?? live.run_id);
     }, (e: ApiError) => {
       if (e.status === 401) shell.askLogin();
       setError(e.message);
@@ -77,6 +79,9 @@ export default function TripPage({ id, run, shell }: { id: string; run: string |
           {d.pending?.kind === "itinerary_approval" && <div id="approve"><ApprovalCard payload={d.pending} busy={sending} onSubmit={decide} /></div>}
         </>
       ) : !stream && !d.pending && <Empty title={t("Chưa có lịch trình", "No itinerary yet")}><p className="muted">{t("Chuyến đi này chưa tới bước lập lịch.", "This trip has not reached the planning step.")}</p></Empty>}
+      {d.itinerary?.status === "approved" && !d.running && !d.pending && (
+        <ReviseTrip id={id} onStarted={(runId) => { setStream(runId); setResumes((n) => n + 1); load(); }} />
+      )}
       <DeleteTrip id={id} />
     </div>
   );
@@ -304,6 +309,42 @@ function TraceTab({ runs }: { runs: RunRow[] }) {
         </details>
       ))}
     </div>
+  );
+}
+
+/** Sửa lịch đã duyệt: agent lập lại theo ghi chú (chạy nền), người dùng duyệt lại; từ chối bản mới thì giữ bản cũ. */
+function ReviseTrip({ id, onStarted }: { id: string; onStarted: (runId: string) => void }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      onStarted((await api<{ run_id: string }>(`/trips/${id}/revise`, { json: { note: note.trim() } })).run_id);
+      setNote("");
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="approval revise" onSubmit={send}>
+      <h2>{t("Muốn đổi lịch trình đã duyệt?", "Want to change your approved itinerary?")}</h2>
+      <p className="small muted">{t(
+        "Agent lập lại theo ghi chú và chạy ngầm, bạn có thể sang trang khác. Xong bạn duyệt lại; từ chối bản mới thì giữ bản hiện tại. Đánh dấu đã đi không chuyển sang bản mới.",
+        "The agent replans from your note in the background, so you can leave this page. Approve the new version when it is ready; rejecting it keeps the current one. Visited marks do not carry over.")}</p>
+      <label>{t("Điều muốn sửa", "What to change")}
+        <textarea rows={3} required minLength={3} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)}
+          placeholder={t("vd bỏ Lăng Khải Định, thêm nghỉ trưa ngày 2", "e.g. drop the Tomb of Khai Dinh, add a lunch break on day 2")} />
+      </label>
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="approval-actions">
+        <button className="primary" disabled={busy || note.trim().length < 3}>{busy ? t("Đang gửi...", "Sending...") : t("Gửi yêu cầu sửa", "Request changes")}</button>
+      </div>
+    </form>
   );
 }
 

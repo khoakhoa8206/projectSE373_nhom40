@@ -159,6 +159,27 @@ def my_trips(user_id: str = Depends(current_user)):
     )
 
 
+@app.get("/api/ui/activity")
+def activity(user_id: str = Depends(current_user)):
+    """Chuyến có agent đang chạy nền hoặc đang chờ người dùng: PWA hiện thanh báo ở mọi trang."""
+    return repo.query(
+        """SELECT t.trip_id,
+               EXISTS (SELECT 1 FROM runs r WHERE r.trip_id = t.trip_id AND r.status = 'running') AS running,
+               (SELECT kind FROM approvals a WHERE a.trip_id = t.trip_id AND a.decision = 'pending'
+                ORDER BY a.created_at LIMIT 1) AS waiting
+           FROM trips t WHERE t.user_id = ? AND (running OR waiting IS NOT NULL) ORDER BY t.updated_at DESC""",
+        (user_id,),
+    )
+
+
+@app.get("/api/ui/trips/{trip_id}/messages")
+def trip_messages(trip_id: str, user_id: str = Depends(current_user)):
+    """Hội thoại UC-01 của chuyến: trang chat mở lại vẫn thấy, không lưu nội dung trong trình duyệt."""
+    own_trip(trip_id, user_id)
+    return repo.query("SELECT role, content FROM messages WHERE trip_id = ? AND role IN ('user', 'assistant')"
+                      " ORDER BY created_at, rowid", (trip_id,))  # fmt: skip
+
+
 @app.get("/api/ui/trips/{trip_id}")
 def trip_detail(trip_id: str, user_id: str = Depends(current_user)):
     own_trip(trip_id, user_id)

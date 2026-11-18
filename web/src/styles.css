@@ -50,6 +50,10 @@ button.link { padding: 0; border: 0; background: none; color: var(--brand-dark);
 .lang-switch button { padding: 6px 10px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; font-weight: 700; }
 .lang-switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
 .lang-switch ~ .account, .lang-switch ~ button.primary { margin-left: 0; }
+.bg-runs { background: #fff7ed; border-bottom: 1px solid #fed7aa; padding: 8px 20px; font-size: .92rem; }
+.bg-runs p { max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bg-runs a { font-weight: 600; }
+.revise { margin-top: 24px; }
 .nav-bottom { display: none; }
 
 .hero { position: relative; height: min(68vh, 560px); min-height: 420px; overflow: hidden; color: #fff; }

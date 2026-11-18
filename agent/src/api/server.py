@@ -18,7 +18,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from agent.db import repo
 from agent.db.init import FICTIONAL_USERS
-from agent.schemas import TripEvent, TripProfile
+from agent.schemas import Itinerary, TripEvent, TripProfile
 from agent.src.api.stream import run_events
 from agent.src.graph import app as graph
 from agent.src.memory import store
@@ -222,6 +222,27 @@ def resume_trip(trip_id: str, body: ResumeIn, background: bool = False, user_id:
     if result["error"]:
         raise HTTPException(500, result)
     return result
+
+
+class ReviseIn(BaseModel):
+    note: str = Field(min_length=3, max_length=2000)
+
+
+@app.post("/api/trips/{trip_id}/revise")
+def revise_trip(trip_id: str, body: ReviseIn, user_id: str = Depends(current_user)):
+    """Sửa lịch trình ĐÃ duyệt (chạy nền, trả {run_id}): lập lại theo ghi chú rồi chờ duyệt lại như lần đầu.
+    Người dùng từ chối bản mới thì bản đã duyệt cũ được giữ lại."""
+    own_trip(trip_id, user_id)
+    it = repo.itinerary_for_trip(trip_id)
+    if not it or it["status"] != "approved":
+        raise HTTPException(409, "Chỉ sửa được lịch trình đã duyệt")
+    if repo.query("SELECT 1 FROM runs WHERE trip_id = ? AND status = 'running'", (trip_id,)):
+        raise HTTPException(409, "Agent đang chạy cho chuyến này, chờ xong rồi sửa")
+    previous = Itinerary.model_validate(it | {"has_unpriced_item": bool(it["has_unpriced_item"])})
+    repo.query("UPDATE trips SET status = 'planning', updated_at = ? WHERE trip_id = ?", (repo.now(), trip_id))
+    run_id = repo.create_run("UC-02", trip_id, user_id)
+    start(graph.run_uc02, trip_id, user_id, run_id=run_id, approval=True, revise=(previous, body.note.strip()))
+    return {"run_id": run_id, "status": "running"}
 
 
 class MessageIn(BaseModel):

@@ -35,6 +35,16 @@ export default function ProfilePage({ user, onExpired, ApprovalCard = ApprovalAd
     catch { /* Không lưu nội dung hội thoại/key; storage bị chặn không làm hỏng trang. */ }
   }, [tripId, activeRun, user.user_id]);
 
+  // Hội thoại lấy từ server (bảng messages): rời trang rồi quay lại vẫn thấy, agent vẫn chạy nền trong lúc đó.
+  async function loadMessages(trip = tripId) {
+    if (!trip) return;
+    try {
+      const rows = await api<{ role: ChatMessage["role"]; content: string }[]>(`/ui/trips/${encodeURIComponent(trip)}/messages`);
+      setMessages(rows.map((r) => ({ role: r.role, text: r.content })));
+    } catch { /* giữ nội dung đang hiện nếu chưa tải được */ }
+  }
+  useEffect(() => { void loadMessages(); }, []);
+
   async function loadItinerary() {
     if (!tripId) return;
     try { setItinerary(await api<Itinerary>(`/trips/${encodeURIComponent(tripId)}/itinerary`)); }
@@ -48,14 +58,13 @@ export default function ProfilePage({ user, onExpired, ApprovalCard = ApprovalAd
       onInterrupt: (request) => {
         setPending(request);
         setBusy(false);
-        if (request.kind === "ask_user") {
-          setMessages((old) => [...old, { role: "assistant", text: request.data.questions.map((q) => q.text).join("\n") }]);
-        } else { void loadItinerary(); }
+        void loadMessages(); // câu hỏi ask_user đã được lưu thành tin nhắn của agent
+        if (request.kind !== "ask_user") void loadItinerary();
       },
       onDone: (data) => {
         setBusy(false);
         setActiveRun(null);
-        if (data.message) setMessages((old) => [...old, { role: "assistant", text: data.message! }]);
+        void loadMessages();
         void loadItinerary();
       },
       onError: (message) => { setBusy(false); setError(message); },
@@ -100,7 +109,7 @@ export default function ProfilePage({ user, onExpired, ApprovalCard = ApprovalAd
     <section className="chat-card">
       <h2>{t("Trao đổi hồ sơ chuyến đi", "Trip profile chat")}</h2>
       <p className="muted">{t("Chỉ hỗ trợ Huế. Agent hỏi tối đa 3 câu/lượt, không tự đoán dữ kiện thiếu.", "Hue only. The agent asks at most 3 questions per turn and never guesses missing details.")}</p>
-      {!saved.runId && saved.tripId && <p className="muted">{t("Đang tiếp tục chuyến trước. Nội dung chat không lưu trong trình duyệt.", "Continuing your previous trip. Chat content is not stored in the browser.")}</p>}
+      {saved.tripId && <p className="muted">{t("Đang tiếp tục chuyến trước. Agent vẫn chạy nền khi bạn sang trang khác.", "Continuing your previous trip. The agent keeps running in the background when you leave this page.")}</p>}
       <div role="log" aria-label={t("Hội thoại chuyến đi", "Trip chat")} aria-live="polite" className="chat-log">
         {messages.map((message, index) => <p key={index} className={`bubble ${message.role}`}>
           <strong>{message.role === "user" ? t("Bạn", "You") : "Agent"}: </strong>{message.text}

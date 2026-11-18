@@ -46,6 +46,7 @@ class State(TypedDict, total=False):
     approval: bool  # có dừng chờ người dùng duyệt lịch trình không (API: có; eval/test cũ: không)
     decision: str  # quyết định gần nhất của người dùng ở bước duyệt
     user_feedback: str | None  # ghi chú khi người dùng chọn "sửa", plan dùng làm yêu cầu cho lượt mới
+    approved_before: Itinerary | None  # sửa lịch đã duyệt: bản cũ, khôi phục nếu người dùng từ chối bản mới
     user_id: str
     memory: list[dict]  # UC-07: sở thích người dùng đã đồng ý lưu từ chuyến trước, plan dùng để ưu tiên
     intake: dict  # UC-01: {route, questions, conflicts, message} của lượt intake gần nhất
@@ -190,6 +191,15 @@ def approve(state):
         return {"decision": decision, "user_feedback": str(answer.get("response") or ""), "round": 0, "violations": [],
                 "history": [], "itinerary_id": repo.new_id("it"), "best_itinerary": None, "best_violations": None,
                 "best_score": None, "planning_stopped": False, "planning_warning": None}  # fmt: skip
+    if previous := state.get("approved_before"):  # từ chối bản sửa → bản đã duyệt trước đó lại là bản mới nhất
+        new_id = repo.new_id("it")
+        slots = [s.model_copy(update={"slot_id": s.slot_id.replace(previous.itinerary_id, new_id, 1)}) for s in previous.slots]
+        repo.save_itinerary(previous.model_copy(update={"itinerary_id": new_id, "status": "approved", "slots": slots,
+                                                        "run_id": state["run_id"]}), [])  # fmt: skip
+        repo.query("UPDATE trips SET status = 'approved', updated_at = ? WHERE trip_id = ?", (ts, state["trip_id"]))
+        repo.log_event(state["run_id"], "approve", "guardrail", name="keep_approved_itinerary",
+                       result={"restored_from": previous.itinerary_id, "itinerary_id": new_id})
+        return {"decision": decision}
     repo.query("UPDATE trips SET status = 'profiling', updated_at = ? WHERE trip_id = ?", (ts, state["trip_id"]))
     return {"decision": decision}
 
@@ -324,11 +334,15 @@ def summarize(run_id, out, error):
             "interrupt": pending[0] if pending else None}  # fmt: skip
 
 
-def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None, run_id=None, approval=False):
+def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None, run_id=None, approval=False, revise=None):
     """Chạy 1 lượt UC-02 và luôn đóng run (token, chi phí, độ trễ). approval=True: dừng chờ người dùng duyệt.
+    revise = (lịch đã duyệt, ghi chú): lập lại theo ghi chú như nút "sửa"; từ chối bản mới thì giữ bản cũ.
     Trả {run_id, itinerary_id, status, error, interrupt}."""
     run_id = run_id or repo.create_run("UC-02", trip_id, user_id, eval_case_id)
     state = {"run_id": run_id, "trip_id": trip_id, "itinerary_id": repo.new_id("it"), "approval": approval}
+    if revise:
+        previous, note = revise
+        state |= {"itinerary": previous, "user_feedback": note, "approved_before": previous}
     return summarize(run_id, *drive("UC-02", run_id, trip_id, state, client, tools))
 
 

@@ -99,6 +99,7 @@ export default function App() {
         </div>
       </header>
       <OfflineBanner />
+      {user && !hash.startsWith("/chat") && <BackgroundRuns hash={hash} />}
       {error && <p className="banner-error" role="alert">{error}</p>}
       <main>{page}</main>
       <footer className="foot">
@@ -124,6 +125,49 @@ export default function App() {
           <AuthPanel onDone={signedIn} onClose={() => setLogin(false)} />
         </div>
       )}
+    </div>
+  );
+}
+
+type Activity = { trip_id: string; running: number; waiting: string | null };
+const waitingFor = (kind: string) => ({
+  itinerary_approval: t("duyệt lịch trình", "approve the itinerary"), ask_user: t("trả lời câu hỏi", "answer a question"),
+  memory_save: t("chọn sở thích muốn lưu", "choose preferences to save"),
+})[kind] ?? kind;
+
+/** Agent chạy trong thread của server theo chuyến đi, không theo trang: rời trang không dừng nó.
+ * Thanh này hỏi server mỗi 4 giây (chỉ khi tab đang mở) để báo ở mọi trang: đang chạy, hoặc đã xong và chờ bạn. */
+function BackgroundRuns({ hash }: { hash: string }) {
+  const [items, setItems] = useState<Activity[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const poll = () => {
+      if (document.visibilityState === "visible") api<Activity[]>("/ui/activity").then((x) => alive && setItems(x), () => undefined);
+    };
+    poll();
+    const timer = setInterval(poll, 4000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [hash]);
+  const shown = items.filter((a) => !hash.startsWith(`/trips/${a.trip_id}`)); // trang chuyến đi đã có tiến trình riêng
+  const running = shown.filter((a) => a.running);
+  const waiting = shown.filter((a) => !a.running && a.waiting);
+  if (!running.length && !waiting.length) return null;
+  return (
+    <div className="bg-runs" role="status" aria-live="polite">
+      {running.length > 0 && (
+        <p>
+          <span className="spinner small-spinner" aria-hidden />
+          {t(`Agent đang chạy ngầm cho ${running.length} chuyến đi, bạn cứ dùng trang khác.`,
+            `The agent is working on ${running.length} trip${running.length > 1 ? "s" : ""} in the background, feel free to keep browsing.`)}
+          <a href={`#/trips/${running[0].trip_id}`}>{t("Xem tiến trình", "View progress")}</a>
+        </p>
+      )}
+      {waiting.map((a) => (
+        <p key={a.trip_id}>
+          {t("Agent đã xong, đang chờ bạn", "The agent is done and waiting for you to")} {waitingFor(a.waiting!)}.
+          <a href={`#/trips/${a.trip_id}`}>{t("Mở chuyến đi", "Open trip")}</a>
+        </p>
+      ))}
     </div>
   );
 }
