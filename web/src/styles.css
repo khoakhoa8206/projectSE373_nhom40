@@ -46,6 +46,10 @@ button.link { padding: 0; border: 0; background: none; color: var(--brand-dark);
 .nav-main a[aria-current="page"] { border-color: var(--brand); font-weight: 600; }
 .account { margin-left: auto; display: flex; align-items: center; gap: 12px; white-space: nowrap; font-size: .92rem; }
 .top-row > button.primary { margin-left: auto; }
+.lang-switch { margin-left: auto; display: flex; flex: none; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.lang-switch button { padding: 6px 10px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; font-weight: 700; }
+.lang-switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.lang-switch ~ .account, .lang-switch ~ button.primary { margin-left: 0; }
 .nav-bottom { display: none; }
 
 .hero { position: relative; height: min(68vh, 560px); min-height: 420px; overflow: hidden; color: #fff; }

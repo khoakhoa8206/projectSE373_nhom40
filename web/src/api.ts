@@ -12,7 +12,7 @@ export type Poi = {
 
 export type PoiDetail = Poi & {
   about: { lang: "vi" | "en"; title: string; section: string; text: string; doc_id: string; source_url: string; license: string }[];
-  nearby: { poi_id: string; name_vi: string; category: string; minutes: number }[];
+  nearby: { poi_id: string; name_vi: string; name_en: string | null; category: string; minutes: number }[];
 };
 
 export type Claim = {
@@ -71,6 +71,7 @@ export type Slot = {
   hours_status: "verified" | "unverified" | "not_applicable";
   note: string | null;
   name_vi: string | null;
+  name_en?: string | null;
   lat: number | null;
   lon: number | null;
 };

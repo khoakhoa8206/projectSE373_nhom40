@@ -2,22 +2,25 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, type ApiError, type Claim, type MemoryRow, type Narration, type Poi } from "../api";
 import type { Shell } from "../App";
 import { distanceM, nearestPoi, useSessionLocation } from "../location";
-import { ClaimBadge, Empty, INTEREST, Skeleton } from "../ui";
+import { getLang, poiName, t } from "../i18n";
+import { ClaimBadge, Empty, interest, Skeleton } from "../ui";
 
-const KIND: Record<string, string> = {
-  food_like: "Món thích", food_dislike: "Món không ăn", allergy: "Dị ứng", dietary: "Chế độ ăn", pace: "Nhịp đi", interest: "Sở thích", visited_city: "Đã đi", other: "Khác",
+const KIND: Record<string, [string, string]> = {
+  food_like: ["Món thích", "Favourite food"], food_dislike: ["Món không ăn", "Food to avoid"], allergy: ["Dị ứng", "Allergy"],
+  dietary: ["Chế độ ăn", "Diet"], pace: ["Nhịp đi", "Pace"], interest: ["Sở thích", "Interest"], visited_city: ["Đã đi", "Visited"], other: ["Khác", "Other"],
 };
+const kind = (k: string) => (KIND[k] ? t(...KIND[k]) : k);
 
 function NeedLogin({ shell }: { shell: Shell }) {
-  return <div className="wrap page"><Empty title="Cần đăng nhập để dùng mục này"><button className="primary" onClick={shell.askLogin}>Đăng nhập</button></Empty></div>;
+  return <div className="wrap page"><Empty title={t("Cần đăng nhập để dùng mục này", "Log in to use this section")}><button className="primary" onClick={shell.askLogin}>{t("Đăng nhập", "Log in")}</button></Empty></div>;
 }
 
 export function NarratePage({ shell, preset }: { shell: Shell; preset: string | null }) {
-  const attractions = shell.pois.filter((p) => p.category === "attraction").sort((a, b) => a.name_vi.localeCompare(b.name_vi, "vi"));
+  const attractions = shell.pois.filter((p) => p.category === "attraction").sort((a, b) => poiName(a).localeCompare(poiName(b), getLang()));
   const [poiId, setPoiId] = useState(preset ?? "");
   const [question, setQuestion] = useState("");
   const [detail, setDetail] = useState(false);
-  const [lang, setLang] = useState<"vi" | "en">(shell.user?.preferred_lang ?? "vi");
+  const [lang, setLang] = useState<"vi" | "en">(getLang());
   const [result, setResult] = useState<Narration | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -57,36 +60,36 @@ export function NarratePage({ shell, preset }: { shell: Shell; preset: string | 
 
   return (
     <div className="wrap page narrow">
-      <h1>Thuyết minh điểm tham quan</h1>
-      <p className="muted">Trả lời theo ngôn ngữ bạn chọn, kèm trích dẫn. Kho tri thức không có thì hệ thống nói rõ.</p>
-      {!shell.llm && <p className="note small">Thuyết minh cần khoá LLM. Thêm LLM_API_KEY vào file .env rồi khởi động lại.</p>}
+      <h1>{t("Thuyết minh điểm tham quan", "Site narration")}</h1>
+      <p className="muted">{t("Trả lời theo ngôn ngữ bạn chọn, kèm trích dẫn. Kho tri thức không có thì hệ thống nói rõ.", "Answers in the language you pick, with citations. If the knowledge base has nothing, it says so.")}</p>
+      {!shell.llm && <p className="note small">{t("Thuyết minh cần khoá LLM. Thêm LLM_API_KEY vào file .env rồi khởi động lại.", "Narration needs an LLM key. Add LLM_API_KEY to .env and restart.")}</p>}
       <form className="stack" onSubmit={submit}>
-        <label htmlFor="n-poi">Địa điểm</label>
+        <label htmlFor="n-poi">{t("Địa điểm", "Place")}</label>
         <select id="n-poi" value={poiId} onChange={(e) => setPoiId(e.target.value)}>
-          <option value="">Tìm trong toàn bộ kho</option>
-          {attractions.map((p) => <option key={p.poi_id} value={p.poi_id}>{p.name_vi}</option>)}
+          <option value="">{t("Tìm trong toàn bộ kho", "Search the whole knowledge base")}</option>
+          {attractions.map((p) => <option key={p.poi_id} value={p.poi_id}>{poiName(p)}</option>)}
         </select>
-        <label htmlFor="n-q">Câu hỏi</label>
-        <input id="n-q" required={!poiId} maxLength={500} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ngọ Môn được xây năm nào?" />
-        <label htmlFor="n-lang">Ngôn ngữ trả lời</label>
+        <label htmlFor="n-q">{t("Câu hỏi", "Question")}</label>
+        <input id="n-q" required={!poiId} maxLength={500} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={t("Ngọ Môn được xây năm nào?", "When was the Noon Gate built?")} />
+        <label htmlFor="n-lang">{t("Ngôn ngữ trả lời", "Answer language")}</label>
         <select id="n-lang" value={lang} onChange={(e) => setLang(e.target.value as "vi" | "en")}>
           <option value="vi">Tiếng Việt</option>
           <option value="en">English</option>
         </select>
-        <label className="check"><input type="checkbox" checked={detail} onChange={(e) => setDetail(e.target.checked)} /> Bản chi tiết</label>
-        <button className="primary" disabled={busy}>{busy ? "Đang tìm..." : "Hỏi"}</button>
+        <label className="check"><input type="checkbox" checked={detail} onChange={(e) => setDetail(e.target.checked)} /> {t("Bản chi tiết", "Detailed version")}</label>
+        <button className="primary" disabled={busy}>{busy ? t("Đang tìm...", "Searching...") : t("Hỏi", "Ask")}</button>
       </form>
 
       <section className="here">
-        <h2>Đang ở đây</h2>
-        <p className="small">Vị trí chỉ dùng để tìm điểm tham quan gần bạn trong phiên này. Toạ độ không được lưu và không gửi lên máy chủ.</p>
+        <h2>{t("Đang ở đây", "I'm here")}</h2>
+        <p className="small">{t("Vị trí chỉ dùng để tìm điểm tham quan gần bạn trong phiên này. Toạ độ không được lưu và không gửi lên máy chủ.", "Your location is only used to find nearby sights during this session. Coordinates are never stored or sent to the server.")}</p>
         {here.error && <p className="warn small" role="alert">{here.error}</p>}
-        {!here.coords && <button onClick={here.request} disabled={here.asking}>{here.asking ? "Đang lấy vị trí..." : "Tìm điểm gần tôi"}</button>}
+        {!here.coords && <button onClick={here.request} disabled={here.asking}>{here.asking ? t("Đang lấy vị trí...", "Getting location...") : t("Tìm điểm gần tôi", "Find sights near me")}</button>}
         {nearest && here.coords && (
           <div className="here-found">
-            <p>Gần bạn nhất: <b>{nearest.name_vi}</b>, khoảng {(distanceM(here.coords, nearest) / 1000).toFixed(1)} km đường chim bay.</p>
-            <button className="primary" onClick={hereNow}>Thuyết minh điểm này</button>
-            <button className="ghost" onClick={here.clear}>Tắt vị trí</button>
+            <p>{t("Gần bạn nhất", "Closest to you")}: <b>{poiName(nearest)}</b>, {t("khoảng", "about")} {(distanceM(here.coords, nearest) / 1000).toFixed(1)} {t("km đường chim bay", "km as the crow flies")}.</p>
+            <button className="primary" onClick={hereNow}>{t("Thuyết minh điểm này", "Narrate this place")}</button>
+            <button className="ghost" onClick={here.clear}>{t("Tắt vị trí", "Turn off location")}</button>
           </div>
         )}
       </section>
@@ -95,7 +98,7 @@ export function NarratePage({ shell, preset }: { shell: Shell; preset: string | 
       {result && (
         <section className="answer" aria-live="polite">
           {result.text.split("\n").map((line, i) => <p key={i} className={result.out_of_kb ? "warn" : undefined}>{line}</p>)}
-          {!result.out_of_kb && <button className="ghost" onClick={speak}>Đọc thành tiếng</button>}
+          {!result.out_of_kb && <button className="ghost" onClick={speak}>{t("Đọc thành tiếng", "Read aloud")}</button>}
           {result.citations.map((c) => (
             <p key={c.doc_id + c.section} className="citation small">
               <a href={c.source_url} target="_blank" rel="noreferrer">[{c.doc_id} §{c.section}]</a>
@@ -128,26 +131,26 @@ export function MemoryPage({ shell }: { shell: Shell }) {
   }
   return (
     <div className="wrap page narrow">
-      <h1>Bộ nhớ sở thích</h1>
-      <p className="muted">Chỉ lưu điều bạn đã nói và xác nhận. Mục nhạy cảm chỉ lưu khi bạn đồng ý, mọi mục đều sửa và xoá được.</p>
+      <h1>{t("Bộ nhớ sở thích", "Preference memory")}</h1>
+      <p className="muted">{t("Chỉ lưu điều bạn đã nói và xác nhận. Mục nhạy cảm chỉ lưu khi bạn đồng ý, mọi mục đều sửa và xoá được.", "Only what you said and confirmed is saved. Sensitive items are saved only with your consent; everything can be edited or deleted.")}</p>
       {error && <p className="error" role="alert">{error}</p>}
       {!items && !error && <Skeleton />}
-      {items?.length === 0 && <Empty title="Bộ nhớ đang trống"><p className="muted">Sau khi duyệt lịch trình, agent sẽ hỏi bạn có muốn lưu sở thích không.</p></Empty>}
+      {items?.length === 0 && <Empty title={t("Bộ nhớ đang trống", "Memory is empty")}><p className="muted">{t("Sau khi duyệt lịch trình, agent sẽ hỏi bạn có muốn lưu sở thích không.", "After you approve an itinerary, the agent will ask whether to save your preferences.")}</p></Empty>}
       <ul className="memory-list">
         {items?.map((m) => (
           <li key={m.memory_id}>
             <div>
-              <span className="muted small">{KIND[m.kind]}{m.sensitivity === "sensitive" && ", nhạy cảm"}</span>
+              <span className="muted small">{kind(m.kind)}{m.sensitivity === "sensitive" && t(", nhạy cảm", ", sensitive")}</span>
               {editing === m.memory_id
-                ? <input aria-label={`Sửa ${KIND[m.kind]}`} value={value} maxLength={200} onChange={(e) => setValue(e.target.value)} />
-                : <p><b>{INTEREST[m.value] ?? m.value}</b></p>}
-              <span className="muted tiny">Hết hạn {m.expires_at.slice(0, 10)}</span>
+                ? <input aria-label={t(`Sửa ${kind(m.kind)}`, `Edit ${kind(m.kind)}`)} value={value} maxLength={200} onChange={(e) => setValue(e.target.value)} />
+                : <p><b>{interest(m.value)}</b></p>}
+              <span className="muted tiny">{t("Hết hạn", "Expires")} {m.expires_at.slice(0, 10)}</span>
             </div>
             <div className="memory-actions">
               {editing === m.memory_id
-                ? <button className="primary" disabled={!value.trim()} onClick={() => act(() => api(`/memory/${m.memory_id}`, { method: "PATCH", json: { value } }))}>Lưu</button>
-                : <button onClick={() => { setEditing(m.memory_id); setValue(m.value); }}>Sửa</button>}
-              <button className="ghost" onClick={() => act(() => api(`/memory/${m.memory_id}`, { method: "DELETE" }))}>Xoá</button>
+                ? <button className="primary" disabled={!value.trim()} onClick={() => act(() => api(`/memory/${m.memory_id}`, { method: "PATCH", json: { value } }))}>{t("Lưu", "Save")}</button>
+                : <button onClick={() => { setEditing(m.memory_id); setValue(m.value); }}>{t("Sửa", "Edit")}</button>}
+              <button className="ghost" onClick={() => act(() => api(`/memory/${m.memory_id}`, { method: "DELETE" }))}>{t("Xoá", "Delete")}</button>
             </div>
           </li>
         ))}
@@ -157,7 +160,8 @@ export function MemoryPage({ shell }: { shell: Shell }) {
 }
 
 export function VerifyPage({ shell }: { shell: Shell }) {
-  const [text, setText] = useState("Đại Nội Huế giá vé 300.000đ. Lăng Tự Đức giá vé 150.000đ. Bảo tàng Cổ vật Cung đình Huế mở cửa lúc 9h. Chùa Thiên Mụ mở cửa lúc 7h.");
+  const [text, setText] = useState(() => t("Đại Nội Huế giá vé 300.000đ. Lăng Tự Đức giá vé 150.000đ. Bảo tàng Cổ vật Cung đình Huế mở cửa lúc 9h. Chùa Thiên Mụ mở cửa lúc 7h.",
+    "The Imperial City of Hue ticket costs 300,000 VND. The Tomb of Tu Duc ticket costs 150,000 VND. The Hue Royal Antiquities Museum opens at 9am. Thien Mu Pagoda opens at 7am."));
   const [result, setResult] = useState<{ blocked: boolean; lines: { text: string; claims: Claim[] }[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -177,23 +181,23 @@ export function VerifyPage({ shell }: { shell: Shell }) {
   }
   return (
     <div className="wrap page narrow">
-      <h1>Kiểm chứng thông tin</h1>
-      <p className="muted">Dán một đoạn nháp có giờ, giá, thời tiết hoặc khoảng cách. Số sai được sửa theo nguồn trước khi trình bày.</p>
+      <h1>{t("Kiểm chứng thông tin", "Fact check")}</h1>
+      <p className="muted">{t("Dán một đoạn nháp có giờ, giá, thời tiết hoặc khoảng cách. Số sai được sửa theo nguồn trước khi trình bày.", "Paste a draft with hours, prices, weather or distances. Wrong numbers are corrected from sources before display.")}</p>
       <form className="stack" onSubmit={check}>
-        <label htmlFor="v-text">Đoạn cần kiểm</label>
+        <label htmlFor="v-text">{t("Đoạn cần kiểm", "Text to check")}</label>
         <textarea id="v-text" rows={5} required maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} />
-        <button className="primary" disabled={busy}>{busy ? "Đang kiểm..." : "Kiểm chứng"}</button>
+        <button className="primary" disabled={busy}>{busy ? t("Đang kiểm...", "Checking...") : t("Kiểm chứng", "Check")}</button>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
       {result && (
         <section className="answer" aria-live="polite">
-          <h2>Bản được trình bày</h2>
+          <h2>{t("Bản được trình bày", "Version shown to the user")}</h2>
           <ul className="verify-lines">
             {result.lines.map((line, i) => (
               <li key={i}>
                 <span>{line.text}</span>
                 <div className="tags">
-                  {line.claims.length === 0 && <span className="muted tiny">Không có dữ kiện cần kiểm</span>}
+                  {line.claims.length === 0 && <span className="muted tiny">{t("Không có dữ kiện cần kiểm", "No facts to check")}</span>}
                   {line.claims.map((c, j) => <ClaimBadge key={j} c={c} />)}
                 </div>
               </li>
@@ -210,18 +214,18 @@ export function CreditsPage({ pois }: { pois: Poi[] }) {
   const without = pois.filter((p) => !p.image);
   return (
     <div className="wrap page">
-      <h1>Nguồn ảnh và giấy phép</h1>
-      <p className="muted">Ảnh lấy từ Wikimedia Commons với giấy phép cho phép tái sử dụng. Ảnh món ăn là ảnh minh hoạ, không chụp tại quán được nhắc.</p>
+      <h1>{t("Nguồn ảnh và giấy phép", "Photo credits and licences")}</h1>
+      <p className="muted">{t("Ảnh lấy từ Wikimedia Commons với giấy phép cho phép tái sử dụng. Ảnh món ăn là ảnh minh hoạ, không chụp tại quán được nhắc.", "Photos come from Wikimedia Commons under reuse-friendly licences. Food photos are illustrative, not taken at the named restaurant.")}</p>
       <div className="credits">
         {withImage.map((p) => (
           <div key={p.poi_id}>
             <img src={p.image!.file} alt="" loading="lazy" />
-            <p className="small"><b>{p.name_vi}</b>{p.image!.illustrative && " (minh hoạ)"}</p>
+            <p className="small"><b>{poiName(p)}</b>{p.image!.illustrative && t(" (minh hoạ)", " (illustrative)")}</p>
             <p className="muted tiny"><a href={p.image!.source_url} target="_blank" rel="noreferrer">{p.image!.author}</a>, {p.image!.license}</p>
           </div>
         ))}
       </div>
-      {without.length > 0 && <p className="muted small">Chưa có ảnh được phép dùng: {without.map((p) => p.name_vi).join(", ")}.</p>}
+      {without.length > 0 && <p className="muted small">{t("Chưa có ảnh được phép dùng", "No licensed photo yet")}: {without.map(poiName).join(", ")}.</p>}
     </div>
   );
 }

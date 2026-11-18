@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Decision, InterruptPayload, MemoryItem } from "../api";
+import { t } from "../i18n";
 import "./components.css";
 
 type Submit = (decision: Decision, response: unknown) => void;
@@ -30,8 +31,8 @@ function AskUser({ questions, conflicts = [], onSubmit, busy }: {
   }
 
   return (
-    <form className="approval" onSubmit={submit} aria-label="Agent cần bạn trả lời">
-      <h2>Agent cần bạn trả lời</h2>
+    <form className="approval" onSubmit={submit} aria-label={t("Agent cần bạn trả lời", "The agent needs your answer")}>
+      <h2>{t("Agent cần bạn trả lời", "The agent needs your answer")}</h2>
       {conflicts.length > 0 && (
         <ul className="warn small">
           {conflicts.map((c, i) => (
@@ -46,7 +47,7 @@ function AskUser({ questions, conflicts = [], onSubmit, busy }: {
         </label>
       ))}
       <div className="approval-actions">
-        <button type="submit" className="primary" disabled={busy}>Gửi trả lời</button>
+        <button type="submit" className="primary" disabled={busy}>{t("Gửi trả lời", "Send answer")}</button>
       </div>
     </form>
   );
@@ -56,17 +57,17 @@ function ItineraryApproval({ onSubmit, busy }: { onSubmit: Submit; busy: boolean
   const [note, setNote] = useState("");
   const text = note.trim();
   return (
-    <section className="approval" aria-label="Duyệt lịch trình">
-      <h2>Duyệt lịch trình</h2>
-      <p className="small">Xem lịch trình ở trên. Duyệt để chốt, hoặc ghi chú điều cần sửa để agent lập lại.</p>
+    <section className="approval" aria-label={t("Duyệt lịch trình", "Approve itinerary")}>
+      <h2>{t("Duyệt lịch trình", "Approve itinerary")}</h2>
+      <p className="small">{t("Xem lịch trình ở trên. Duyệt để chốt, hoặc ghi chú điều cần sửa để agent lập lại.", "Review the itinerary above. Approve to lock it in, or note what to change and the agent will replan.")}</p>
       <label>
-        Ghi chú <small>(bắt buộc khi yêu cầu sửa)</small>
-        <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="vd bỏ Lăng Khải Định, thêm nghỉ trưa" />
+        {t("Ghi chú", "Note")} <small>({t("bắt buộc khi yêu cầu sửa", "required when requesting changes")})</small>
+        <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("vd bỏ Lăng Khải Định, thêm nghỉ trưa", "e.g. drop the Tomb of Khai Dinh, add a lunch break")} />
       </label>
       <div className="approval-actions">
-        <button className="primary" disabled={busy} onClick={() => onSubmit("approved", null)}>Duyệt</button>
-        <button disabled={busy || !text} onClick={() => onSubmit("edited", text)}>Sửa</button>
-        <button className="danger" disabled={busy} onClick={() => onSubmit("rejected", text || null)}>Từ chối</button>
+        <button className="primary" disabled={busy} onClick={() => onSubmit("approved", null)}>{t("Duyệt", "Approve")}</button>
+        <button disabled={busy || !text} onClick={() => onSubmit("edited", text)}>{t("Sửa", "Request changes")}</button>
+        <button className="danger" disabled={busy} onClick={() => onSubmit("rejected", text || null)}>{t("Từ chối", "Reject")}</button>
       </div>
     </section>
   );
@@ -84,22 +85,22 @@ function MemorySave({ items, onSubmit, busy }: { items: MemoryItem[]; onSubmit: 
   const save = () => onSubmit(keep.size === items.length ? "approved" : "edited", [...keep]);
 
   return (
-    <section className="approval" aria-label="Lưu vào bộ nhớ">
-      <h2>Lưu vào bộ nhớ cho chuyến sau?</h2>
+    <section className="approval" aria-label={t("Lưu vào bộ nhớ", "Save to memory")}>
+      <h2>{t("Lưu vào bộ nhớ cho chuyến sau?", "Save to memory for your next trip?")}</h2>
       <ul className="memory">
         {items.map((m) => (
           <li key={m.key}>
             <label>
               <input type="checkbox" checked={keep.has(m.key)} onChange={() => toggle(m.key)} />
               {m.value}
-              {m.sensitivity === "sensitive" && <span className="tag warn">nhạy cảm, chỉ lưu khi bạn chọn</span>}
+              {m.sensitivity === "sensitive" && <span className="tag warn">{t("nhạy cảm, chỉ lưu khi bạn chọn", "sensitive, saved only if you tick it")}</span>}
             </label>
           </li>
         ))}
       </ul>
       <div className="approval-actions">
-        <button className="primary" disabled={busy || keep.size === 0} onClick={save}>Lưu mục đã chọn</button>
-        <button disabled={busy} onClick={() => onSubmit("rejected", [])}>Không lưu gì</button>
+        <button className="primary" disabled={busy || keep.size === 0} onClick={save}>{t("Lưu mục đã chọn", "Save selected")}</button>
+        <button disabled={busy} onClick={() => onSubmit("rejected", [])}>{t("Không lưu gì", "Save nothing")}</button>
       </div>
     </section>
   );

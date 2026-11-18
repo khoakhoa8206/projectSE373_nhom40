@@ -4,14 +4,15 @@ import type { Shell } from "../App";
 import AgentStream from "../components/AgentStream";
 import ApprovalCard from "../components/ApprovalCard";
 import MapView, { DAY_COLORS } from "../MapView";
-import { ClaimBadge, Empty, go, INTEREST, localIso, Photo, Skeleton, vnd } from "../ui";
-import { STATUS } from "./Plan";
+import { getLang, poiName, t } from "../i18n";
+import { ClaimBadge, Empty, go, interest, localIso, Photo, Skeleton, vnd } from "../ui";
+import { status } from "./Plan";
 
-const TABS = [["plan", "Lịch trình"], ["review", "Review"], ["claims", "Kiểm chứng"], ["journal", "Nhật ký"], ["trace", "Trace"]] as const;
+const TABS = [["plan", ["Lịch trình", "Itinerary"]], ["review", ["Review", "Review"]], ["claims", ["Kiểm chứng", "Fact check"]],
+  ["journal", ["Nhật ký", "Journal"]], ["trace", ["Trace", "Trace"]]] as const;
 type Tab = (typeof TABS)[number][0];
-const REVIEWER = { local_expert: "Chuyên gia địa phương", budget: "Kiểm ngân sách", safety: "An toàn" };
-const SEVERITY = { low: "thấp", medium: "trung bình", high: "cao" };
-const PACE = { relaxed: "Thong thả", moderate: "Vừa phải", packed: "Dày đặc" };
+const REVIEWER = { local_expert: ["Chuyên gia địa phương", "Local expert"], budget: ["Kiểm ngân sách", "Budget check"], safety: ["An toàn", "Safety"] } as const;
+const SEVERITY = { low: ["thấp", "low"], medium: ["trung bình", "medium"], high: ["cao", "high"] } as const;
 
 export default function TripPage({ id, run, shell }: { id: string; run: string | null; shell: Shell }) {
   const [d, setD] = useState<TripDetail | null>(null);
@@ -49,14 +50,14 @@ export default function TripPage({ id, run, shell }: { id: string; run: string |
     }
   }
 
-  if (error && !d) return <div className="wrap page"><Empty title="Không mở được chuyến đi"><p className="muted">{error}</p><a href="#/trips">Về danh sách</a></Empty></div>;
+  if (error && !d) return <div className="wrap page"><Empty title={t("Không mở được chuyến đi", "Could not open this trip")}><p className="muted">{error}</p><a href="#/trips">{t("Về danh sách", "Back to list")}</a></Empty></div>;
   if (!d) return <div className="wrap page"><Skeleton rows={5} /></div>;
 
   const claimsOf = (slot: string) => d.claims.filter((c) => c.target_id === slot);
   return (
     <div className="wrap page">
-      <p className="crumbs"><a href="#/trips">Chuyến đi</a> / {STATUS[d.trip.status]}</p>
-      <h1>{d.profile?.start_date ? `Huế, ${d.profile.start_date} đến ${d.profile.end_date}` : "Chuyến đi mới"}</h1>
+      <p className="crumbs"><a href="#/trips">{t("Chuyến đi", "Trips")}</a> / {status(d.trip.status)}</p>
+      <h1>{d.profile?.start_date ? t(`Huế, ${d.profile.start_date} đến ${d.profile.end_date}`, `Hue, ${d.profile.start_date} to ${d.profile.end_date}`) : t("Chuyến đi mới", "New trip")}</h1>
       <Profile d={d} />
       {error && <p className="error" role="alert">{error}</p>}
       {d.pending && d.pending.kind !== "itinerary_approval" && <ApprovalCard payload={d.pending} busy={sending} onSubmit={decide} />}
@@ -64,9 +65,9 @@ export default function TripPage({ id, run, shell }: { id: string; run: string |
 
       {d.itinerary ? (
         <>
-          {d.pending?.kind === "itinerary_approval" && <p className="note"><b>Lịch trình đang chờ bạn duyệt.</b> <a href="#" onClick={(e) => { e.preventDefault(); document.getElementById("approve")?.scrollIntoView({ behavior: "smooth" }); }}>Đến bước duyệt</a></p>}
+          {d.pending?.kind === "itinerary_approval" && <p className="note"><b>{t("Lịch trình đang chờ bạn duyệt.", "Your itinerary is waiting for approval.")}</b> <a href="#" onClick={(e) => { e.preventDefault(); document.getElementById("approve")?.scrollIntoView({ behavior: "smooth" }); }}>{t("Đến bước duyệt", "Go to approval")}</a></p>}
           <div className="tabs" role="tablist">
-            {TABS.filter(([v]) => v !== "review" || d.review.reports.length > 0).map(([v, label]) => <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)}>{label}</button>)}
+            {TABS.filter(([v]) => v !== "review" || d.review.reports.length > 0).map(([v, label]) => <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)}>{t(label[0], label[1])}</button>)}
           </div>
           {tab === "plan" && <PlanTab d={d} shell={shell} claimsOf={claimsOf} reload={load} tripId={id} />}
           {tab === "review" && <ReviewTab d={d} />}
@@ -75,7 +76,7 @@ export default function TripPage({ id, run, shell }: { id: string; run: string |
           {tab === "trace" && <TraceTab runs={d.runs} />}
           {d.pending?.kind === "itinerary_approval" && <div id="approve"><ApprovalCard payload={d.pending} busy={sending} onSubmit={decide} /></div>}
         </>
-      ) : !stream && !d.pending && <Empty title="Chưa có lịch trình"><p className="muted">Chuyến đi này chưa tới bước lập lịch.</p></Empty>}
+      ) : !stream && !d.pending && <Empty title={t("Chưa có lịch trình", "No itinerary yet")}><p className="muted">{t("Chuyến đi này chưa tới bước lập lịch.", "This trip has not reached the planning step.")}</p></Empty>}
       <DeleteTrip id={id} />
     </div>
   );
@@ -85,11 +86,11 @@ function Profile({ d }: { d: TripDetail }) {
   const p = d.profile;
   if (!p) return null;
   const items = [
-    p.adults && `${p.adults} người lớn`,
-    p.children.length > 0 && `Trẻ em ${p.children.map((c) => c.age).join(", ")} tuổi`,
+    p.adults && t(`${p.adults} người lớn`, `${p.adults} adult${p.adults > 1 ? "s" : ""}`),
+    p.children.length > 0 && t(`Trẻ em ${p.children.map((c) => c.age).join(", ")} tuổi`, `Children aged ${p.children.map((c) => c.age).join(", ")}`),
     p.budget_total_vnd && vnd(p.budget_total_vnd),
-    p.pace && PACE[p.pace],
-    ...p.interests.map((x) => INTEREST[x] ?? x),
+    p.pace && interest(p.pace),
+    ...p.interests.map(interest),
     p.mobility_notes,
     ...p.hard_constraints,
   ].filter(Boolean);
@@ -108,9 +109,11 @@ function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell:
     <div className="plan-grid">
       <div>
         <p className={it.status === "failed_validation" ? "warn" : "ok"}>
-          {it.status === "failed_validation" ? `Còn vi phạm sau ${it.planner_rounds} vòng lập lịch` : `Đã qua validator sau ${it.planner_rounds} vòng`}
+          {it.status === "failed_validation"
+            ? t(`Còn vi phạm sau ${it.planner_rounds} vòng lập lịch`, `Violations remain after ${it.planner_rounds} planning rounds`)
+            : t(`Đã qua validator sau ${it.planner_rounds} vòng`, `Passed the validator after ${it.planner_rounds} rounds`)}
         </p>
-        <p>Chi phí đã có giá: <b>{it.total_cost_vnd == null ? "chưa có" : vnd(it.total_cost_vnd)}</b>{it.has_unpriced_item ? ", còn các mục chưa có giá" : ""}</p>
+        <p>{t("Chi phí đã có giá", "Priced costs")}: <b>{it.total_cost_vnd == null ? t("chưa có", "none yet") : vnd(it.total_cost_vnd)}</b>{it.has_unpriced_item ? t(", còn các mục chưa có giá", ", some items have no price yet") : ""}</p>
         {it.violations.map((v) => <p key={v.violation_id} className="warn small">[{v.rule}] {v.message}</p>)}
         {days.map((day) => {
           const slots = it.slots.filter((s) => s.day_index === day);
@@ -126,22 +129,22 @@ function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell:
                     <div className="slot-photo">{poi && <Photo poi={poi} />}</div>
                     <div>
                       <p className="slot-time">{s.start_time} - {s.end_time}</p>
-                      <p className="slot-name">{s.poi_id ? <a href={`#/poi/${s.poi_id}`}>{s.name_vi}</a> : "Tự do"}</p>
+                      <p className="slot-name">{s.poi_id ? <a href={`#/poi/${s.poi_id}`}>{poiName(s)}</a> : t("Tự do", "Free time")}</p>
                       <p className="small">{s.activity}</p>
                       <div className="tags">
-                        {s.travel_minutes_from_prev != null && <span className="tag">{s.travel_minutes_from_prev} phút di chuyển</span>}
+                        {s.travel_minutes_from_prev != null && <span className="tag">{s.travel_minutes_from_prev} {t("phút di chuyển", "min travel")}</span>}
                         {s.cost_vnd != null && !priceWrong && <span className="tag">{vnd(s.cost_vnd)}</span>}
-                        {s.cost_source === "unverified" && <span className="tag warn">chưa có giá</span>}
-                        {s.hours_status === "unverified" && <span className="tag warn">giờ chưa xác minh</span>}
+                        {s.cost_source === "unverified" && <span className="tag warn">{t("chưa có giá", "no price yet")}</span>}
+                        {s.hours_status === "unverified" && <span className="tag warn">{t("giờ chưa xác minh", "hours not verified")}</span>}
                         {claims.filter((c) => c.status !== "unverified").map((c, i) => <ClaimBadge key={i} c={c} />)}
                       </div>
                       {s.note && <p className="muted tiny">{s.note}</p>}
                       {canLog && (s.progress === "planned" ? (
                         <div className="slot-actions">
-                          <button onClick={() => mark(s, "slot_done")}>Đã đi</button>
-                          <button onClick={() => mark(s, "slot_skipped")}>Bỏ qua</button>
+                          <button onClick={() => mark(s, "slot_done")}>{t("Đã đi", "Visited")}</button>
+                          <button onClick={() => mark(s, "slot_skipped")}>{t("Bỏ qua", "Skip")}</button>
                         </div>
-                      ) : <p className="small"><b>{s.progress === "done" ? "Đã đi" : "Đã bỏ qua"}</b></p>)}
+                      ) : <p className="small"><b>{s.progress === "done" ? t("Đã đi", "Visited") : t("Đã bỏ qua", "Skipped")}</b></p>)}
                     </div>
                   </div>
                 );
@@ -152,7 +155,7 @@ function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell:
       </div>
       <div className="map-stick">
         <MapView slots={it.slots} pois={[]} />
-        <p className="muted tiny">Đường nét đứt nối các điểm theo thứ tự tham quan, không phải đường đi thực tế.</p>
+        <p className="muted tiny">{t("Đường nét đứt nối các điểm theo thứ tự tham quan, không phải đường đi thực tế.", "Dashed lines connect stops in visiting order, not actual routes.")}</p>
       </div>
     </div>
   );
@@ -160,27 +163,27 @@ function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell:
 
 function ReviewTab({ d }: { d: TripDetail }) {
   const { reports, coordination } = d.review;
-  if (!reports.length) return <Empty title="Chưa có kết quả review" />;
-  const name = (ref: string | null) => d.itinerary?.slots.find((s) => s.slot_id === ref)?.name_vi;
+  if (!reports.length) return <Empty title={t("Chưa có kết quả review", "No review results yet")} />;
+  const name = (ref: string | null) => { const s = d.itinerary?.slots.find((x) => x.slot_id === ref); return s && poiName(s); };
   return (
     <div className="review">
       {reports.map((r) => (
         <section key={r.report_id} className="reviewer">
-          <h3>{REVIEWER[r.reviewer]} <small className="muted">vòng {r.round}</small></h3>
-          <p className={r.verdict === "approve" ? "ok" : "warn"}>{r.verdict === "approve" ? "Chấp thuận" : "Yêu cầu sửa"}</p>
-          {r.findings.length === 0 && <p className="muted small">Không có phát hiện nào.</p>}
+          <h3>{t(REVIEWER[r.reviewer][0], REVIEWER[r.reviewer][1])} <small className="muted">{t("vòng", "round")} {r.round}</small></h3>
+          <p className={r.verdict === "approve" ? "ok" : "warn"}>{r.verdict === "approve" ? t("Chấp thuận", "Approved") : t("Yêu cầu sửa", "Changes requested")}</p>
+          {r.findings.length === 0 && <p className="muted small">{t("Không có phát hiện nào.", "No findings.")}</p>}
           {r.findings.map((f, i) => (
             <div key={i} className="finding">
-              <p><b>Mức {SEVERITY[f.severity]}</b>{name(f.slot_ref) && `, ${name(f.slot_ref)}`}</p>
+              <p><b>{t("Mức", "Severity")} {t(SEVERITY[f.severity][0], SEVERITY[f.severity][1])}</b>{name(f.slot_ref) && `, ${name(f.slot_ref)}`}</p>
               <p className="small">{f.message}</p>
-              {f.suggestion && <p className="muted small">Gợi ý: {f.suggestion}</p>}
+              {f.suggestion && <p className="muted small">{t("Gợi ý", "Suggestion")}: {f.suggestion}</p>}
             </div>
           ))}
         </section>
       ))}
       <details className="coordination">
-        <summary>Trao đổi giữa các agent ({coordination.length} thông điệp)</summary>
-        <ol className="timeline">{coordination.map((c, i) => <li key={i}><time>{c.ts.slice(11, 19)}</time> <b>{c.from}</b> tới <b>{c.to}</b>: {c.message}</li>)}</ol>
+        <summary>{t("Trao đổi giữa các agent", "Agent coordination")} ({coordination.length} {t("thông điệp", "messages")})</summary>
+        <ol className="timeline">{coordination.map((c, i) => <li key={i}><time>{c.ts.slice(11, 19)}</time> <b>{c.from}</b> {t("tới", "to")} <b>{c.to}</b>: {c.message}</li>)}</ol>
       </details>
     </div>
   );
@@ -188,11 +191,11 @@ function ReviewTab({ d }: { d: TripDetail }) {
 
 function ClaimsTab({ d }: { d: TripDetail }) {
   const count = (s: string) => d.claims.filter((c) => c.status === s).length;
-  if (!d.claims.length) return <Empty title="Chưa có dữ kiện được kiểm" />;
+  if (!d.claims.length) return <Empty title={t("Chưa có dữ kiện được kiểm", "No facts checked yet")} />;
   return (
     <div>
-      <p><b>{count("verified")}</b> đã xác minh, <b>{count("unverified")}</b> chưa xác minh, <b>{count("contradicted")}</b> đã sửa theo nguồn.</p>
-      <p className="muted small">Dữ liệu chưa có nguồn được gắn nhãn chưa xác minh, hệ thống không điền giá trị ước đoán.</p>
+      <p><b>{count("verified")}</b> {t("đã xác minh", "verified")}, <b>{count("unverified")}</b> {t("chưa xác minh", "not verified")}, <b>{count("contradicted")}</b> {t("đã sửa theo nguồn", "corrected from source")}.</p>
+      <p className="muted small">{t("Dữ liệu chưa có nguồn được gắn nhãn chưa xác minh, hệ thống không điền giá trị ước đoán.", "Data without a source is labelled not verified; the system never fills in guessed values.")}</p>
       <div className="tags">{d.claims.map((c, i) => <ClaimBadge key={i} c={c} />)}</div>
     </div>
   );
@@ -204,7 +207,7 @@ function JournalTab({ d, tripId, reload, llm }: { d: TripDetail; tripId: string;
   const [kind, setKind] = useState<"expense" | "note">("expense");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
-  const [lang, setLang] = useState<"vi" | "en">("vi");
+  const [lang, setLang] = useState<"vi" | "en">(getLang());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -240,44 +243,44 @@ function JournalTab({ d, tripId, reload, llm }: { d: TripDetail; tripId: string;
   return (
     <div className="journal">
       <form className="journal-form" onSubmit={add}>
-        <h3>Ghi vào nhật ký</h3>
-        <label>Ngày
-          <select value={day} onChange={(e) => setDay(Number(e.target.value))}>{days.map((x) => <option key={x} value={x}>Ngày {x}</option>)}</select>
+        <h3>{t("Ghi vào nhật ký", "Add to journal")}</h3>
+        <label>{t("Ngày", "Day")}
+          <select value={day} onChange={(e) => setDay(Number(e.target.value))}>{days.map((x) => <option key={x} value={x}>{t("Ngày", "Day")} {x}</option>)}</select>
         </label>
-        <label>Loại
-          <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}><option value="expense">Chi tiêu</option><option value="note">Ghi chú</option></select>
+        <label>{t("Loại", "Type")}
+          <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}><option value="expense">{t("Chi tiêu", "Expense")}</option><option value="note">{t("Ghi chú", "Note")}</option></select>
         </label>
-        {kind === "expense" && <label>Số tiền (VND)<input type="number" min={0} required value={amount} onChange={(e) => setAmount(e.target.value)} /></label>}
-        <label>Nội dung<input maxLength={500} required={kind === "note"} value={note} onChange={(e) => setNote(e.target.value)} /></label>
-        <button>Thêm</button>
-        <p className="muted tiny">Đã ghi {d.events.length} sự kiện.</p>
+        {kind === "expense" && <label>{t("Số tiền (VND)", "Amount (VND)")}<input type="number" min={0} required value={amount} onChange={(e) => setAmount(e.target.value)} /></label>}
+        <label>{t("Nội dung", "Details")}<input maxLength={500} required={kind === "note"} value={note} onChange={(e) => setNote(e.target.value)} /></label>
+        <button>{t("Thêm", "Add")}</button>
+        <p className="muted tiny">{t(`Đã ghi ${d.events.length} sự kiện.`, `${d.events.length} events logged.`)}</p>
       </form>
       <div>
         <div className="journal-head">
           <div className="seg">
-            <button className="primary" disabled={busy} onClick={() => build({ scope: "day", day_index: day })}>Tóm tắt ngày {day}</button>
-            <button disabled={busy} onClick={() => build({ scope: "trip" })}>Tóm tắt cả chuyến</button>
+            <button className="primary" disabled={busy} onClick={() => build({ scope: "day", day_index: day })}>{t(`Tóm tắt ngày ${day}`, `Summarise day ${day}`)}</button>
+            <button disabled={busy} onClick={() => build({ scope: "trip" })}>{t("Tóm tắt cả chuyến", "Summarise whole trip")}</button>
           </div>
-          <div className="seg" role="group" aria-label="Ngôn ngữ nhật ký">
+          <div className="seg" role="group" aria-label={t("Ngôn ngữ nhật ký", "Journal language")}>
             <button aria-pressed={lang === "vi"} onClick={() => setLang("vi")}>Tiếng Việt</button>
             <button aria-pressed={lang === "en"} onClick={() => setLang("en")}>English</button>
           </div>
         </div>
-        {!llm && <p className="note small">Tóm tắt nhật ký cần khoá LLM. Ghi sự kiện vẫn dùng được.</p>}
-        {busy && <p className="muted small">Đang tóm tắt...</p>}
+        {!llm && <p className="note small">{t("Tóm tắt nhật ký cần khoá LLM. Ghi sự kiện vẫn dùng được.", "Journal summaries need an LLM key. Logging events still works.")}</p>}
+        {busy && <p className="muted small">{t("Đang tóm tắt...", "Summarising...")}</p>}
         {error && <p className="error" role="alert">{error}</p>}
-        {!trip && dayJournals.length === 0 && <Empty title="Chưa có nhật ký"><p className="muted">Đánh dấu điểm đã đi, ghi chi tiêu rồi bấm tóm tắt.</p></Empty>}
+        {!trip && dayJournals.length === 0 && <Empty title={t("Chưa có nhật ký", "No journal yet")}><p className="muted">{t("Đánh dấu điểm đã đi, ghi chi tiêu rồi bấm tóm tắt.", "Mark visited stops, log expenses, then press summarise.")}</p></Empty>}
         {trip && (
           <section className="trip-summary">
             <p className="big">{vnd(trip.total_spent_vnd)}</p>
             <p>{trip.content.summary}</p>
             {trip.content.highlights.map((h) => <p key={h.text} className="small">{h.text}</p>)}
-            {trip.tokens_before != null && <p className="muted tiny">Token khi tóm tắt theo tầng: {trip.tokens_before} xuống {trip.tokens_after}.</p>}
+            {trip.tokens_before != null && <p className="muted tiny">{t(`Token khi tóm tắt theo tầng: ${trip.tokens_before} xuống ${trip.tokens_after}.`, `Tokens with layered summary: ${trip.tokens_before} down to ${trip.tokens_after}.`)}</p>}
           </section>
         )}
         {dayJournals.map((j) => (
           <section key={j.day_index} className="journal-day">
-            <p><b>Ngày {j.day_index}: {vnd(j.total_spent_vnd)}</b></p>
+            <p><b>{t("Ngày", "Day")} {j.day_index}: {vnd(j.total_spent_vnd)}</b></p>
             <p className="small">{j.content.summary}</p>
             {j.content.highlights.map((h) => <p key={h.text} className="small">{h.text}</p>)}
           </section>
@@ -314,11 +317,11 @@ function DeleteTrip({ id }: { id: string }) {
     <div className="danger-zone">
       {sure ? (
         <>
-          <span>Xoá hẳn lịch trình, nhật ký và trace của chuyến này?</span>
-          <button className="danger" onClick={remove}>Xoá</button>
-          <button className="ghost" onClick={() => setSure(false)}>Giữ lại</button>
+          <span>{t("Xoá hẳn lịch trình, nhật ký và trace của chuyến này?", "Permanently delete this trip's itinerary, journal and traces?")}</span>
+          <button className="danger" onClick={remove}>{t("Xoá", "Delete")}</button>
+          <button className="ghost" onClick={() => setSure(false)}>{t("Giữ lại", "Keep")}</button>
         </>
-      ) : <button className="ghost" onClick={() => setSure(true)}>Xoá dữ liệu chuyến đi</button>}
+      ) : <button className="ghost" onClick={() => setSure(true)}>{t("Xoá dữ liệu chuyến đi", "Delete trip data")}</button>}
     </div>
   );
 }

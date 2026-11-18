@@ -1,14 +1,17 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type ApiError, type TripProfile, type TripRow } from "../api";
 import type { Shell } from "../App";
-import { Empty, go, Skeleton, vnd } from "../ui";
+import { getLang, t } from "../i18n";
+import { Empty, go, interest, Skeleton, vnd } from "../ui";
 
-export const STATUS: Record<string, string> = {
-  profiling: "Đang hỏi thêm thông tin", planning: "Đang lập lịch", awaiting_approval: "Chờ bạn duyệt", approved: "Đã duyệt",
-  in_progress: "Đang đi", completed: "Đã xong", cancelled: "Đã huỷ",
+const STATUS: Record<string, [string, string]> = {
+  profiling: ["Đang hỏi thêm thông tin", "Collecting details"], planning: ["Đang lập lịch", "Planning"],
+  awaiting_approval: ["Chờ bạn duyệt", "Awaiting your approval"], approved: ["Đã duyệt", "Approved"],
+  in_progress: ["Đang đi", "In progress"], completed: ["Đã xong", "Completed"], cancelled: ["Đã huỷ", "Cancelled"],
 };
+export const status = (s: string) => (STATUS[s] ? t(...STATUS[s]) : s);
 
-const INTERESTS = [["history", "Lịch sử"], ["food", "Ẩm thực"], ["culture", "Văn hoá"], ["nature", "Thiên nhiên"], ["shopping", "Mua sắm"]] as const;
+const INTERESTS = ["history", "food", "culture", "nature", "shopping"] as const;
 
 type Form = {
   start_date: string;
@@ -45,20 +48,18 @@ function addDays(d: string, n: number) {
 
 function dayCount(a: string, b: string) {
   const n = Math.round((Date.parse(b) - Date.parse(a)) / 86400000) + 1;
-  return n >= 1 && n <= 5 ? `${n} ngày` : null;
+  return n >= 1 && n <= 5 ? t(`${n} ngày`, `${n} day${n > 1 ? "s" : ""}`) : null;
 }
 
 export function PlanPage({ shell, preset }: { shell: Shell; preset: string }) {
   const [form, setForm] = useState<Form>({
     start_date: "2026-11-25", end_date: "2026-11-27", adults: 2, children: "", budget: "8000000",
-    interests: ["history", "food"], pace: "moderate", language: "vi", mobility_notes: "",
+    interests: ["history", "food"], pace: "moderate", language: getLang(), mobility_notes: "",
   });
   const [text, setText] = useState(preset);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const preferred = shell.user?.preferred_lang;
-  useEffect(() => { if (preferred) setForm((f) => ({ ...f, language: preferred })); }, [preferred]);
 
   async function start(path: string, json: unknown) {
     if (!shell.user) return shell.askLogin();
@@ -78,76 +79,76 @@ export function PlanPage({ shell, preset }: { shell: Shell; preset: string }) {
 
   return (
     <div className="wrap page narrow">
-      <h1>Kể về chuyến đi của bạn</h1>
-      <p className="muted">Điền thông tin chuyến đi, agent sẽ lập lịch để bạn duyệt.</p>
+      <h1>{t("Kể về chuyến đi của bạn", "Tell us about your trip")}</h1>
+      <p className="muted">{t("Điền thông tin chuyến đi, agent sẽ lập lịch để bạn duyệt.", "Fill in your trip details and the agent will draft an itinerary for you to approve.")}</p>
       <form onSubmit={submitForm}>
         <fieldset disabled={busy} className="form-grid">
           <label>
-            Ngày đi
+            {t("Ngày đi", "Start date")}
             <input type="date" required value={form.start_date} onChange={(e) => set("start_date", e.target.value)} />
           </label>
           <label>
-            <span>Ngày về <small>(tối đa 5 ngày{length ? `, đang chọn ${length}` : ""})</small></span>
+            <span>{t("Ngày về", "End date")} <small>({t("tối đa 5 ngày", "up to 5 days")}{length ? t(`, đang chọn ${length}`, `, ${length} selected`) : ""})</small></span>
             <input type="date" required min={form.start_date} max={addDays(form.start_date, 4)} value={form.end_date} onChange={(e) => set("end_date", e.target.value)} />
           </label>
           <label>
-            Người lớn
+            {t("Người lớn", "Adults")}
             <input type="number" required min={1} max={6} value={form.adults} onChange={(e) => set("adults", Number(e.target.value))} />
           </label>
           <label>
-            <span>Tuổi trẻ em <small>(cách nhau dấu phẩy)</small></span>
-            <input inputMode="numeric" pattern="[0-9 ,]*" placeholder="vd 6, 9" value={form.children} onChange={(e) => set("children", e.target.value)} />
+            <span>{t("Tuổi trẻ em", "Children's ages")} <small>({t("cách nhau dấu phẩy", "comma separated")})</small></span>
+            <input inputMode="numeric" pattern="[0-9 ,]*" placeholder={t("vd 6, 9", "e.g. 6, 9")} value={form.children} onChange={(e) => set("children", e.target.value)} />
           </label>
           <label>
-            Ngân sách cả chuyến (VND)
+            {t("Ngân sách cả chuyến (VND)", "Total budget (VND)")}
             <input type="number" min={1} value={form.budget} onChange={(e) => set("budget", e.target.value)} />
           </label>
           <label>
-            Nhịp độ
+            {t("Nhịp độ", "Pace")}
             <select value={form.pace} onChange={(e) => set("pace", e.target.value as Form["pace"])}>
-              <option value="relaxed">Thong thả</option>
-              <option value="moderate">Vừa phải</option>
-              <option value="packed">Dày đặc</option>
+              <option value="relaxed">{interest("relaxed")}</option>
+              <option value="moderate">{interest("moderate")}</option>
+              <option value="packed">{interest("packed")}</option>
             </select>
           </label>
           <fieldset className="wide">
-            <legend>Sở thích</legend>
+            <legend>{t("Sở thích", "Interests")}</legend>
             <div className="interests">
-              {INTERESTS.map(([v, label]) => (
+              {INTERESTS.map((v) => (
                 <label key={v}>
                   <input type="checkbox" checked={form.interests.includes(v)}
                     onChange={(e) => set("interests", e.target.checked ? [...form.interests, v] : form.interests.filter((x) => x !== v))} />
-                  {label}
+                  {interest(v)}
                 </label>
               ))}
             </div>
           </fieldset>
           <label>
-            Ngôn ngữ
+            {t("Ngôn ngữ lịch trình", "Itinerary language")}
             <select value={form.language} onChange={(e) => set("language", e.target.value as Form["language"])}>
               <option value="vi">Tiếng Việt</option>
               <option value="en">English</option>
             </select>
           </label>
           <label>
-            Ghi chú đi lại
-            <input maxLength={500} placeholder="vd có người cao tuổi, ít đi bộ" value={form.mobility_notes} onChange={(e) => set("mobility_notes", e.target.value)} />
+            {t("Ghi chú đi lại", "Mobility notes")}
+            <input maxLength={500} placeholder={t("vd có người cao tuổi, ít đi bộ", "e.g. elderly traveller, little walking")} value={form.mobility_notes} onChange={(e) => set("mobility_notes", e.target.value)} />
           </label>
-          <button type="submit" className="wide primary">{busy ? "Đang gửi..." : "Lập lịch trình"}</button>
+          <button type="submit" className="wide primary">{busy ? t("Đang gửi...", "Sending...") : t("Lập lịch trình", "Plan itinerary")}</button>
         </fieldset>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
 
       <details className="text-entry" open={!!preset}>
-        <summary>Hoặc kể bằng lời (cần đủ ngày, số người, ngân sách)</summary>
+        <summary>{t("Hoặc kể bằng lời (cần đủ ngày, số người, ngân sách)", "Or describe it in words (include dates, group size, budget)")}</summary>
         <form onSubmit={submitText}>
-          <label htmlFor="trip-text" className="sr">Yêu cầu chuyến đi</label>
+          <label htmlFor="trip-text" className="sr">{t("Yêu cầu chuyến đi", "Trip request")}</label>
           <textarea id="trip-text" rows={2} required minLength={3} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)}
-            placeholder="Cuối tháng 11 nhà mình đi Huế 3 ngày, 2 người lớn 1 bé 6 tuổi, khoảng 8 triệu" />
-          <button className="primary" disabled={busy}>Gửi</button>
+            placeholder={t("Cuối tháng 11 nhà mình đi Huế 3 ngày, 2 người lớn 1 bé 6 tuổi, khoảng 8 triệu", "Late November, Hue for 3 days, 2 adults and a 6-year-old, about 8 million VND")} />
+          <button className="primary" disabled={busy}>{t("Gửi", "Send")}</button>
         </form>
       </details>
-      {!shell.llm && <p className="note">Bản này chưa có khoá LLM nên planner là bản giả. Giờ, giá, thời tiết, validator, bước duyệt và bộ nhớ vẫn là code và dữ liệu thật của nhóm.</p>}
+      {!shell.llm && <p className="note">{t("Bản này chưa có khoá LLM nên planner là bản giả. Giờ, giá, thời tiết, validator, bước duyệt và bộ nhớ vẫn là code và dữ liệu thật của nhóm.", "This build has no LLM key, so the planner is a stub. Hours, prices, weather, validator, approval and memory are still the team's real code and data.")}</p>}
     </div>
   );
 }
@@ -159,23 +160,23 @@ export function TripsPage({ shell }: { shell: Shell }) {
     if (shell.user) api<TripRow[]>("/ui/trips").then(setTrips, (e: ApiError) => setError(e.message));
   }, [shell.user]);
 
-  if (!shell.user) return <div className="wrap page"><Empty title="Đăng nhập để xem chuyến đi"><button className="primary" onClick={shell.askLogin}>Đăng nhập</button></Empty></div>;
+  if (!shell.user) return <div className="wrap page"><Empty title={t("Đăng nhập để xem chuyến đi", "Log in to see your trips")}><button className="primary" onClick={shell.askLogin}>{t("Đăng nhập", "Log in")}</button></Empty></div>;
   return (
     <div className="wrap page">
-      <h1>Chuyến đi của tôi</h1>
+      <h1>{t("Chuyến đi của tôi", "My trips")}</h1>
       {error && <p className="error" role="alert">{error}</p>}
       {!trips && !error && <Skeleton />}
-      {trips?.length === 0 && <Empty title="Bạn chưa có chuyến nào"><a className="button primary" href="#/plan">Lập lịch trình</a></Empty>}
+      {trips?.length === 0 && <Empty title={t("Bạn chưa có chuyến nào", "You have no trips yet")}><a className="button primary" href="#/plan">{t("Lập lịch trình", "Plan itinerary")}</a></Empty>}
       <div className="trip-list">
-        {trips?.map((t) => (
-          <a key={t.trip_id} className="trip-row" href={`#/trips/${t.trip_id}`}>
+        {trips?.map((trip) => (
+          <a key={trip.trip_id} className="trip-row" href={`#/trips/${trip.trip_id}`}>
             <div>
-              <b>{t.start_date ? `Huế, ${t.start_date} đến ${t.end_date}` : "Chuyến đi chưa đủ thông tin"}</b>
-              <p className="muted small">{t.request}</p>
+              <b>{trip.start_date ? t(`Huế, ${trip.start_date} đến ${trip.end_date}`, `Hue, ${trip.start_date} to ${trip.end_date}`) : t("Chuyến đi chưa đủ thông tin", "Trip details incomplete")}</b>
+              <p className="muted small">{trip.request}</p>
             </div>
             <div className="trip-state">
-              <span className={t.waiting ? "tag warn" : "tag"}>{t.waiting ? "Agent đang chờ bạn" : STATUS[t.status]}</span>
-              {t.budget_total_vnd != null && <span className="muted small">{vnd(t.budget_total_vnd)}</span>}
+              <span className={trip.waiting ? "tag warn" : "tag"}>{trip.waiting ? t("Agent đang chờ bạn", "Agent is waiting for you") : status(trip.status)}</span>
+              {trip.budget_total_vnd != null && <span className="muted small">{vnd(trip.budget_total_vnd)}</span>}
             </div>
           </a>
         ))}

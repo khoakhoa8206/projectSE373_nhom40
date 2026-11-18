@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType, type FormEvent } from "react";
 import { api, ApiError, watchRun, type ApprovalAnswer, type ApprovalCardProps, type ApprovalRequest, type Itinerary, type User } from "../api";
 import ApprovalAdapter from "../components/ApprovalAdapter";
+import { t } from "../i18n";
 import ItineraryPage from "./Itinerary";
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
@@ -65,7 +66,7 @@ export default function ProfilePage({ user, onExpired, ApprovalCard = ApprovalAd
     const failure = cause as ApiError;
     if (failure.status === 401) onExpired();
     setError(failure.status === 404 || failure.status === 405
-      ? "Backend hiện chưa có API messages/resume của P1. Bạn có thể dùng Nhập nhanh; không có kết quả hội thoại giả."
+      ? t("Backend hiện chưa có API messages/resume của P1. Bạn có thể dùng Nhập nhanh; không có kết quả hội thoại giả.", "The backend does not have the messages/resume API yet. Use quick entry instead; no fake chat results are shown.")
       : failure.message);
   }
 
@@ -97,24 +98,24 @@ export default function ProfilePage({ user, onExpired, ApprovalCard = ApprovalAd
 
   return <main className="chat-page">
     <section className="chat-card">
-      <h2>Trao đổi hồ sơ chuyến đi</h2>
-      <p className="muted">Chỉ hỗ trợ Huế. Agent hỏi tối đa 3 câu/lượt, không tự đoán dữ kiện thiếu.</p>
-      {!saved.runId && saved.tripId && <p className="muted">Đang tiếp tục chuyến trước. Nội dung chat không lưu trong trình duyệt.</p>}
-      <div role="log" aria-label="Hội thoại chuyến đi" aria-live="polite" className="chat-log">
+      <h2>{t("Trao đổi hồ sơ chuyến đi", "Trip profile chat")}</h2>
+      <p className="muted">{t("Chỉ hỗ trợ Huế. Agent hỏi tối đa 3 câu/lượt, không tự đoán dữ kiện thiếu.", "Hue only. The agent asks at most 3 questions per turn and never guesses missing details.")}</p>
+      {!saved.runId && saved.tripId && <p className="muted">{t("Đang tiếp tục chuyến trước. Nội dung chat không lưu trong trình duyệt.", "Continuing your previous trip. Chat content is not stored in the browser.")}</p>}
+      <div role="log" aria-label={t("Hội thoại chuyến đi", "Trip chat")} aria-live="polite" className="chat-log">
         {messages.map((message, index) => <p key={index} className={`bubble ${message.role}`}>
-          <strong>{message.role === "user" ? "Bạn" : "Agent"}: </strong>{message.text}
+          <strong>{message.role === "user" ? t("Bạn", "You") : "Agent"}: </strong>{message.text}
         </p>)}
       </div>
       <form onSubmit={send}>
-        <label>Yêu cầu của bạn
+        <label>{t("Yêu cầu của bạn", "Your request")}
           <textarea required maxLength={4000} value={text} disabled={busy || !!pending || !!activeRun}
-            placeholder="Từ 27/11 đến 29/11/2026 nhà mình đi Huế…" onChange={(event) => setText(event.target.value)} />
+            placeholder={t("Từ 27/11 đến 29/11/2026 nhà mình đi Huế…", "From 27/11 to 29/11/2026 our family is visiting Hue…")} onChange={(event) => setText(event.target.value)} />
         </label>
-        <button type="submit" className="primary" disabled={busy || !!pending || !!activeRun || !text.trim()}>Gửi</button>
+        <button type="submit" className="primary" disabled={busy || !!pending || !!activeRun || !text.trim()}>{t("Gửi", "Send")}</button>
       </form>
-      {busy && <p role="status">Agent đang xử lý… Không gửi lại yêu cầu.</p>}
+      {busy && <p role="status">{t("Agent đang xử lý… Không gửi lại yêu cầu.", "The agent is working… Please don't resend.")}</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      {error && activeRun && <button disabled={busy} onClick={() => { setError(""); setActiveRun({ id: activeRun.id }); }}>Kết nối lại run</button>}
+      {error && activeRun && <button disabled={busy} onClick={() => { setError(""); setActiveRun({ id: activeRun.id }); }}>{t("Kết nối lại run", "Reconnect to run")}</button>}
       {pending && <ApprovalCard key={pending.approval_id} request={pending} busy={busy} onAnswer={resume} />}
     </section>
     {itinerary && <ItineraryPage itinerary={itinerary} />}

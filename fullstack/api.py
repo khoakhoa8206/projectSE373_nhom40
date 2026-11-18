@@ -117,7 +117,7 @@ def poi(poi_id: str):
         (poi_id,),
     )
     nearby = repo.query(
-        """SELECT p.poi_id, p.name_vi, p.category, t.minutes FROM travel_matrix t JOIN pois p ON p.poi_id = t.to_poi_id
+        """SELECT p.poi_id, p.name_vi, p.name_en, p.category, t.minutes FROM travel_matrix t JOIN pois p ON p.poi_id = t.to_poi_id
            WHERE t.from_poi_id = ? AND t.mode = 'drive' AND t.to_poi_id <> ? AND p.category = 'attraction' ORDER BY t.minutes LIMIT 6""",
         (poi_id, poi_id),
     )

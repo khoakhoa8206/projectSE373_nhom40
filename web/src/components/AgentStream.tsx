@@ -1,26 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import type { InterruptPayload, StreamEvent } from "../api";
+import { t } from "../i18n";
 import "./components.css";
 
 const KINDS = ["node_start", "node_end", "tool_call", "interrupt", "done", "error"] as const;
 type Status = "connecting" | "running" | "reconnecting" | "waiting" | "done" | "failed" | "lost";
 
-const STATUS_TEXT: Record<Status, string> = {
-  connecting: "Đang kết nối…",
-  running: "Agent đang chạy",
-  reconnecting: "Mất kết nối, đang kết nối lại…",
-  waiting: "Đang chờ bạn",
-  done: "Hoàn tất",
-  failed: "Agent gặp lỗi",
-  lost: "Mất kết nối tới máy chủ",
+const STATUS_TEXT: Record<Status, [string, string]> = {
+  connecting: ["Đang kết nối…", "Connecting…"],
+  running: ["Agent đang chạy", "Agent is running"],
+  reconnecting: ["Mất kết nối, đang kết nối lại…", "Connection lost, reconnecting…"],
+  waiting: ["Đang chờ bạn", "Waiting for you"],
+  done: ["Hoàn tất", "Done"],
+  failed: ["Agent gặp lỗi", "Agent error"],
+  lost: ["Mất kết nối tới máy chủ", "Lost connection to the server"],
 };
-const KIND_TEXT: Record<StreamEvent["kind"], string> = {
-  node_start: "bắt đầu",
-  node_end: "xong",
-  tool_call: "gọi tool",
-  interrupt: "dừng chờ người dùng",
-  done: "hoàn tất",
-  error: "lỗi",
+const KIND_TEXT: Record<StreamEvent["kind"], [string, string]> = {
+  node_start: ["bắt đầu", "start"],
+  node_end: ["xong", "done"],
+  tool_call: ["gọi tool", "tool call"],
+  interrupt: ["dừng chờ người dùng", "waiting for user"],
+  done: ["hoàn tất", "finished"],
+  error: ["lỗi", "error"],
 };
 
 /** Tiến trình 1 lượt chạy, hiện dần từng bước qua SSE GET /api/runs/{run_id}/stream (đi qua proxy Vite nên cookie session
@@ -79,12 +80,12 @@ export default function AgentStream({ runId, onInterrupt, onDone, onError }: {
     <section className="trace" aria-live="polite">
       <p className={status === "failed" || status === "lost" ? "error" : status === "reconnecting" ? "warn" : undefined}>
         {busy && <span className="spinner small-spinner" aria-hidden />}
-        <b>{STATUS_TEXT[status]}</b> · {events.length} bước · <code>{runId}</code>
+        <b>{t(...STATUS_TEXT[status])}</b> · {events.length} {t("bước", "steps")} · <code>{runId}</code>
       </p>
       <ol className="timeline">
         {events.map((e, i) => (
           <li key={i} className={e.kind === "error" ? "err" : undefined}>
-            <time>{e.ts.slice(11, 19)}</time> <b>{e.node}</b> · {KIND_TEXT[e.kind]}
+            <time>{e.ts.slice(11, 19)}</time> <b>{e.node}</b> · {t(...KIND_TEXT[e.kind])}
             {(e.tool ?? e.name) && ` · ${e.tool ?? e.name}`}
             {e.duration_ms != null && ` · ${e.duration_ms} ms`}
             {e.kind === "error" && e.payload != null && ` · ${typeof e.payload === "string" ? e.payload : JSON.stringify(e.payload)}`}
