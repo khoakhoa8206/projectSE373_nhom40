@@ -86,11 +86,6 @@ def meta():
     return {"llm": HAS_LLM}
 
 
-@app.get("/api/ui/me")
-def me(request: Request):
-    return {"user_id": request.session.get("user_id")}
-
-
 @app.post("/api/ui/logout")
 def logout(request: Request):
     request.session.clear()

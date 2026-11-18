@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type ApiError, type Poi, type User } from "./api";
+import AuthPanel from "./components/AuthPanel";
 import { getLang, setLang, t, type Lang } from "./i18n";
 import Home from "./pages/Home";
 import PoiPage from "./pages/Poi";
@@ -11,11 +12,6 @@ import { Empty } from "./ui";
 
 const NAV = () => [["/", t("Khám phá", "Explore")], ["/chat", t("Hội thoại", "Chat")], ["/plan", t("Lập lịch", "Plan")], ["/trips", t("Chuyến đi", "Trips")],
   ["/narrate", t("Thuyết minh", "Narration")], ["/memory", t("Bộ nhớ", "Memory")], ["/verify", t("Kiểm chứng", "Fact check")]];
-const ACCOUNT_NOTE = (id: string) => ({
-  "u-ha": t("Đã có chuyến 3 ngày được duyệt, sự kiện và bộ nhớ", "Has an approved 3-day trip, events and memory"),
-  "u-minh": t("Có lịch trình đang chờ bạn duyệt", "Has an itinerary waiting for approval"),
-  "u-emma": t("English, đã có chuyến 2 ngày được duyệt", "English speaker, has an approved 2-day trip"),
-})[id];
 
 export type Shell = { user: User | null; pois: Poi[]; llm: boolean; askLogin: () => void };
 
@@ -34,7 +30,6 @@ function useHash() {
 
 export default function App() {
   const hash = useHash();
-  const [users, setUsers] = useState<User[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [pois, setPois] = useState<Poi[]>([]);
   const [llm, setLlm] = useState(true);
@@ -44,10 +39,9 @@ export default function App() {
   const switchLang = (l: Lang) => { setLang(l); setLangState(l); }; // App render lại cả cây nên mọi t() đổi theo
 
   useEffect(() => {
-    Promise.all([api<User[]>("/users"), api<{ user_id: string | null }>("/ui/me"), api<Poi[]>("/ui/catalog"), api<{ llm: boolean }>("/ui/meta")])
-      .then(([all, me, catalog, meta]) => {
-        setUsers(all);
-        setUser(all.find((u) => u.user_id === me.user_id) ?? null);
+    Promise.all([api<User | null>("/auth/me"), api<Poi[]>("/ui/catalog"), api<{ llm: boolean }>("/ui/meta")])
+      .then(([me, catalog, meta]) => {
+        setUser(me);
         setPois(catalog);
         setLlm(meta.llm);
       })
@@ -55,8 +49,7 @@ export default function App() {
   }, []);
 
   const askLogin = useCallback(() => setLogin(true), []);
-  async function choose(u: User) {
-    await api("/session", { json: { user_id: u.user_id } });
+  function signedIn(u: User) {
     setUser(u);
     setLogin(false);
     switchLang(u.preferred_lang);
@@ -112,7 +105,7 @@ export default function App() {
         <div className="wrap foot-row">
           <div>
             <b>Cố Đô Guide</b>
-            <p className="muted small">{t("Đồ án SE373, đề tài 08. Người dùng và lịch sử chuyến đi trong bản demo là hư cấu.", "SE373 course project, topic 08. Users and trip history in this demo are fictional.")}</p>
+            <p className="muted small">{t("Đồ án SE373, đề tài 08.", "SE373 course project, topic 08.")}</p>
             {!llm && <p className="small"><b>{t("Đang chạy không có khoá LLM:", "Running without an LLM key:")}</b> {t("planner là bản giả, thuyết minh và nhật ký chưa dùng được. Graph, tool, validator, RAG và bộ nhớ là code thật của nhóm.", "the planner is a stub, narration and journal are unavailable. Graph, tools, validator, RAG and memory are the team's real code.")}</p>}
           </div>
           <p className="muted small">
@@ -127,18 +120,8 @@ export default function App() {
         {NAV().map(([to, label]) => <a key={to} href={`#${to}`} aria-current={active(to) ? "page" : undefined}>{label}</a>)}
       </nav>
       {login && (
-        <div className="modal" role="dialog" aria-modal="true" aria-label={t("Chọn tài khoản demo", "Choose a demo account")} onClick={() => setLogin(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h2>{t("Chọn tài khoản demo", "Choose a demo account")}</h2>
-            <p className="muted">{t("Ba người dùng hư cấu, không có dữ liệu thật và không cần mật khẩu.", "Three fictional users, no real data and no password needed.")}</p>
-            {users.map((u) => (
-              <button key={u.user_id} className="account-card" onClick={() => choose(u)}>
-                <b>{u.display_name}</b>
-                <small>{ACCOUNT_NOTE(u.user_id)}</small>
-              </button>
-            ))}
-            <button className="ghost" onClick={() => setLogin(false)}>{t("Đóng", "Close")}</button>
-          </div>
+        <div className="modal" onClick={() => setLogin(false)}>
+          <AuthPanel onDone={signedIn} onClose={() => setLogin(false)} />
         </div>
       )}
     </div>

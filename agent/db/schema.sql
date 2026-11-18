@@ -96,6 +96,14 @@ CREATE TABLE users (
     created_at      TEXT NOT NULL
 );
 
+-- Tài khoản đăng ký thật. Người dùng hư cấu của eval không có dòng ở đây nên không đăng nhập được từ PWA.
+CREATE TABLE IF NOT EXISTS credentials (
+    user_id         TEXT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    email           TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash   TEXT NOT NULL,                   -- scrypt$n$r$p$salt$hash; không bao giờ lưu mật khẩu gốc
+    created_at      TEXT NOT NULL
+);
+
 CREATE TABLE trips (
     trip_id         TEXT PRIMARY KEY,                -- cũng là thread_id của LangGraph checkpointer
     user_id         TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

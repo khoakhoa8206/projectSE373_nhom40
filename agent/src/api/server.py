@@ -1,6 +1,8 @@
 """Backend API Phase 1. Chạy: uvicorn agent.src.api.server:app --reload  (OpenAPI: /docs, /openapi.json)
-Người dùng lấy từ session cookie (POST /api/session), không bao giờ từ body request."""
+Người dùng lấy từ session cookie (đăng ký/đăng nhập qua /api/auth/*), không bao giờ từ body request."""
 
+import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -24,17 +26,40 @@ from agent.src.nodes.journal import run_uc09
 from agent.src.nodes.narrate import run_uc03
 
 load_dotenv()
-USERS = {user_id: (name, lang) for user_id, name, lang in FICTIONAL_USERS}
+FICTIONAL_IDS = {user_id for user_id, _, _ in FICTIONAL_USERS}
+SCRYPT = (2**14, 8, 1)  # n, r, p: khoảng 16 MB RAM và vài chục ms mỗi lần băm
+
+
+def hash_password(password: str) -> str:
+    salt, (n, r, p) = secrets.token_bytes(16), SCRYPT
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=n, r=r, p=p, dklen=32)
+    return f"scrypt${n}${r}${p}${salt.hex()}${digest.hex()}"
+
+
+def check_password(password: str, stored: str) -> bool:
+    _, n, r, p, salt, digest = stored.split("$")
+    test = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=int(n), r=int(r), p=int(p), dklen=32)
+    return hmac.compare_digest(test.hex(), digest)
+
+
+DUMMY_HASH = hash_password(secrets.token_hex(16))  # email chưa đăng ký vẫn băm 1 lần: không lộ email qua thời gian phản hồi
 
 app = FastAPI(title="Tour Guide Agent API", version="0.1.0")
 # ponytail: thiếu SESSION_SECRET thì sinh ngẫu nhiên → restart server là phải chọn lại người dùng
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET") or secrets.token_hex(32))
 
 
-def current_user(request: Request) -> str:
+def session_user(request: Request) -> str | None:
+    """user_id của phiên nếu còn hợp lệ. Cookie cũ của người dùng hư cấu (trước khi có đăng nhập) bị bỏ qua."""
     user_id = request.session.get("user_id")
-    if user_id not in USERS:
-        raise HTTPException(401, "Chưa chọn người dùng: gọi POST /api/session trước")
+    if user_id in FICTIONAL_IDS and os.environ.get("ALLOW_FICTIONAL_LOGIN") != "1":
+        return None
+    return user_id if user_id and repo.get_user(user_id) else None
+
+
+def current_user(request: Request) -> str:
+    if not (user_id := session_user(request)):
+        raise HTTPException(401, "Chưa đăng nhập")
     return user_id
 
 
@@ -61,6 +86,23 @@ class SessionIn(BaseModel):
     user_id: str
 
 
+EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+
+class RegisterIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    display_name: str = Field(min_length=1, max_length=80)
+    email: str = Field(max_length=254, pattern=EMAIL)
+    password: str = Field(min_length=8, max_length=128)
+    preferred_lang: Literal["vi", "en"] = "vi"
+
+
+class LoginIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=128)
+
+
 class NarrateIn(BaseModel):
     """Body UC-03: poi_id (UI tự tìm POI gần nhất, không bao giờ gửi toạ độ) và/hoặc câu hỏi."""
 
@@ -80,16 +122,47 @@ class JournalIn(BaseModel):
     lang: Literal["vi", "en"] = "vi"
 
 
-@app.get("/api/users")
-def list_users():
-    """3 người dùng hư cấu cho màn hình chọn người dùng."""
-    return [{"user_id": u, "display_name": name, "preferred_lang": lang} for u, (name, lang) in USERS.items()]
+def _sign_in(request: Request, user_id: str):
+    request.session.clear()  # phiên mới sau mỗi lần đăng nhập, không mang dữ liệu phiên cũ
+    request.session["user_id"] = user_id
+    return repo.get_user(user_id)
+
+
+@app.post("/api/auth/register", status_code=201)
+def register(body: RegisterIn, request: Request):
+    """Tạo tài khoản (mật khẩu băm scrypt, có salt riêng) rồi đăng nhập luôn."""
+    name = body.display_name.strip()
+    if not name:
+        raise HTTPException(422, "Cần tên hiển thị")
+    try:
+        user_id = repo.create_account(name, body.preferred_lang, body.email.lower(), hash_password(body.password))
+    except sqlite3.IntegrityError:
+        raise HTTPException(409, "Email này đã có tài khoản") from None
+    return _sign_in(request, user_id)
+
+
+# ponytail: chưa giới hạn số lần thử sai; thêm bộ đếm theo IP/email trước khi đưa lên mạng công khai
+@app.post("/api/auth/login")
+def login(body: LoginIn, request: Request):
+    account = repo.account_by_email(body.email.strip().lower())
+    ok = check_password(body.password, account["password_hash"] if account else DUMMY_HASH)
+    if not (account and ok):
+        raise HTTPException(401, "Email hoặc mật khẩu không đúng")  # không nói rõ sai email hay sai mật khẩu
+    return _sign_in(request, account["user_id"])
+
+
+@app.get("/api/auth/me")
+def me(request: Request):
+    """Người dùng của phiên hiện tại, chưa đăng nhập → null."""
+    user_id = session_user(request)
+    return repo.get_user(user_id) if user_id else None
 
 
 @app.post("/api/session")
-def login(body: SessionIn, request: Request):
-    if body.user_id not in USERS:
-        raise HTTPException(400, "Chỉ chọn được 1 trong 3 người dùng hư cấu")
+def fictional_session(body: SessionIn, request: Request):
+    """Chỉ cho test/eval (ALLOW_FICTIONAL_LOGIN=1): vào thẳng bằng user_id hư cấu. PWA đăng nhập qua /api/auth/*."""
+    if os.environ.get("ALLOW_FICTIONAL_LOGIN") != "1" or body.user_id not in FICTIONAL_IDS:
+        raise HTTPException(404, "Not Found")
     request.session["user_id"] = body.user_id
     return {"user_id": body.user_id}
 
@@ -97,8 +170,6 @@ def login(body: SessionIn, request: Request):
 @app.post("/api/trips")
 def create_trip(profile: TripProfile, user_id: str = Depends(current_user)):
     """Nhận form hồ sơ → tạo trip + trip_profiles v1 (route = plan)."""
-    name, lang = USERS[user_id]
-    repo.create_user(name, lang, user_id)  # có sẵn sau make db; tạo lại nếu DB mới
     trip_id = repo.create_trip(user_id)
     profile_id = repo.save_profile(trip_id, profile.model_copy(update={"route": "plan", "missing_info": []}))
     return {"trip_id": trip_id, "profile_id": profile_id}
@@ -255,8 +326,6 @@ def narrate(body: NarrateIn, user_id: str = Depends(current_user)):
         raise HTTPException(422, "Cần poi_id hoặc question")
     if body.poi_id and not repo.query("SELECT 1 FROM pois WHERE poi_id = ?", (body.poi_id,)):
         raise HTTPException(404, "Không tìm thấy POI")
-    name, lang = USERS[user_id]
-    repo.create_user(name, lang, user_id)  # có sẵn sau make db; tạo lại nếu DB mới
     result = run_uc03(user_id, question, body.poi_id, body.lang, body.length)
     if result["error"]:
         raise HTTPException(500, result)

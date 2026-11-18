@@ -47,6 +47,25 @@ def create_user(display_name, preferred_lang="vi", user_id=None):
     return user_id
 
 
+def get_user(user_id):
+    rows = query("SELECT user_id, display_name, preferred_lang FROM users WHERE user_id = ?", (user_id,))
+    return rows[0] if rows else None
+
+
+def create_account(display_name, preferred_lang, email, password_hash):
+    """Tạo users + credentials trong 1 transaction. Email đã có → sqlite3.IntegrityError."""
+    user_id, ts = new_id("u"), now()
+    with closing(get_conn()) as conn, conn:
+        conn.execute("INSERT INTO users VALUES (?, ?, ?, ?)", (user_id, display_name, preferred_lang, ts))
+        conn.execute("INSERT INTO credentials VALUES (?, ?, ?, ?)", (user_id, email, password_hash, ts))
+    return user_id
+
+
+def account_by_email(email):
+    rows = query("SELECT user_id, password_hash FROM credentials WHERE email = ?", (email,))
+    return rows[0] if rows else None
+
+
 def create_trip(user_id, destination_id="hue"):
     trip_id, ts = new_id("t"), now()
     query(

@@ -171,7 +171,7 @@ export class ApiError extends Error {
 type Detail = string | { loc: (string | number)[]; msg: string }[] | { error?: string; run_id?: string } | undefined;
 
 function describe(status: number, detail: Detail): string {
-  if (status === 401) return "Bạn cần đăng nhập bằng một tài khoản demo.";
+  if (status === 401) return typeof detail === "string" ? detail : "Bạn cần đăng nhập.";
   if (Array.isArray(detail)) return "Hồ sơ chưa hợp lệ: " + detail.map((d) => `${d.loc.slice(1).join(".")}: ${d.msg}`).join("; ");
   if (typeof detail === "string") return detail;
   if (detail?.error) return `Agent gặp lỗi: ${detail.error}`;

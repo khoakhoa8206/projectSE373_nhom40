@@ -50,6 +50,12 @@ try:
         from fullstack import seed
 
         seed.run()
+    else:  # ponytail: DB tạo trước 18/11 chưa có bảng credentials; bỏ khi cả nhóm đã chạy run.py --reset
+        from agent.db import repo
+
+        repo.query("""CREATE TABLE IF NOT EXISTS credentials (
+            user_id TEXT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+            email TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)""")
     procs.append(subprocess.Popen([sys.executable, "-m", "uvicorn", "fullstack.api:app", "--port", "8000", "--log-level", "warning"]))
     wait_port(8000)
     npm = shutil.which("npm") or "npm"

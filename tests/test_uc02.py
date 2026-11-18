@@ -156,7 +156,7 @@ def test_api_flow_and_ownership(db, monkeypatch):
     c = TestClient(server.app)
 
     assert c.post("/api/trips", json=PROFILE).status_code == 401
-    assert c.post("/api/session", json={"user_id": "u-hacker"}).status_code == 400
+    assert c.post("/api/session", json={"user_id": "u-hacker"}).status_code == 404  # user_id lạ: endpoint test coi như không tồn tại
     assert c.post("/api/session", json={"user_id": "u-ha"}).status_code == 200
     trip_id = c.post("/api/trips", json=PROFILE).json()["trip_id"]
     plan = c.post(f"/api/trips/{trip_id}/plan").json()

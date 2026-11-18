@@ -1,7 +1,11 @@
+import os
+
 import pytest
 
 from agent.db import repo
 from agent.db.init import init_db
+
+os.environ.setdefault("ALLOW_FICTIONAL_LOGIN", "1")  # test vào thẳng người dùng hư cấu qua POST /api/session
 
 
 @pytest.fixture
