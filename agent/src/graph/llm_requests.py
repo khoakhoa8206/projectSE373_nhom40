@@ -1,5 +1,6 @@
 """Giãn request và retry 429/5xx hữu hạn, không ghi key/payload vào log."""
 
+import json
 import math
 import os
 import threading
@@ -8,14 +9,41 @@ from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
-from openai import InternalServerError, RateLimitError
+from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
 
 from agent.db import repo
 
 MAX_RETRIES = 2
 MAX_RETRY_WAIT_SECONDS = 60
+# Timeout của SDK (120 s) là giữa 2 lần nhận dữ liệu; OpenRouter gửi khoảng trắng giữ kết nối nên 1 lời gọi từng treo
+# 12 phút (trace 18/11 r-f2cd4266). Đây là hạn TỔNG mỗi lời gọi; lâu nhất từng thành công khi đo là 201 s.
+CALL_DEADLINE_SECONDS = float(os.environ.get("LLM_CALL_DEADLINE_SECONDS", "300"))
 _PACERS = {}
 _PACERS_LOCK = threading.Lock()
+
+
+class LLMDeadlineError(TimeoutError):
+    """Lời gọi LLM quá hạn tổng CALL_DEADLINE_SECONDS."""
+
+
+def _call_with_deadline(fn, kwargs, seconds):
+    """Chạy fn ở thread riêng, chờ tối đa `seconds`. Quá hạn thì bỏ kết quả (thread tự kết thúc khi kết nối đóng)."""
+    box = {}
+
+    def run():
+        try:
+            box["value"] = fn(**kwargs)
+        except BaseException as error:  # noqa: BLE001 — chuyển nguyên lỗi về thread gọi
+            box["error"] = error
+
+    worker = threading.Thread(target=run, daemon=True, name="llm-call")
+    worker.start()
+    worker.join(seconds)
+    if worker.is_alive():
+        raise LLMDeadlineError(f"LLM không trả lời sau {seconds:.0f} s")
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
 
 
 class RequestPacer:
@@ -115,7 +143,7 @@ def request_completion(client, run_id, node, **kwargs):
     for attempt in range(MAX_RETRIES + 1):
         pacer.wait(interval, run_id, node)
         try:
-            return client.chat.completions.create(**kwargs)
+            return _call_with_deadline(client.chat.completions.create, kwargs, CALL_DEADLINE_SECONDS)
         except (RateLimitError, InternalServerError) as error:
             delay = retry_delay(error, attempt)
             if attempt == MAX_RETRIES or delay > MAX_RETRY_WAIT_SECONDS:
@@ -126,4 +154,18 @@ def request_completion(client, run_id, node, **kwargs):
             repo.log_event(run_id, node, "guardrail", name="llm_retry",
                            result={"status": error.status_code, "retry": attempt + 1, "max_retries": MAX_RETRIES,
                                    "seconds": round(delay, 3)})
+            pacer.cooldown(delay)
+        except APITimeoutError:
+            raise  # đã chờ hết timeout 120 s: thử lại sẽ kéo dài vài phút, để node xử lý
+        except (json.JSONDecodeError, APIConnectionError, LLMDeadlineError) as error:
+            # Provider trả 200 nhưng body JSON hỏng / đứt kết nối / quá hạn tổng: lỗi tạm thời, trước đây làm hỏng cả lượt
+            # lập lịch (trace 18/11 r-98408e05). Thử lại hữu hạn, backoff ngắn.
+            if attempt == MAX_RETRIES:
+                repo.log_event(run_id, node, "guardrail", name="llm_retry_exhausted",
+                               result={"error": type(error).__name__, "attempts": attempt + 1, "reason": "retry_limit"})
+                raise
+            delay = 2.0 * (attempt + 1)
+            repo.log_event(run_id, node, "guardrail", name="llm_retry",
+                           result={"error": type(error).__name__, "retry": attempt + 1, "max_retries": MAX_RETRIES,
+                                   "seconds": delay})
             pacer.cooldown(delay)

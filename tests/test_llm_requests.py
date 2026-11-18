@@ -225,3 +225,48 @@ def test_make_client_disables_hidden_sdk_retries(monkeypatch):
     with loop.make_client() as client:
         assert str(client.base_url) == GOOGLE_URL
         assert client.max_retries == 0
+
+
+def test_malformed_200_body_is_retried_then_succeeds(clock):
+    """Provider trả 200 với body JSON hỏng (trace 18/11 r-98408e05): thử lại, không làm hỏng cả lượt lập lịch."""
+    def respond(req):
+        clock.calls.append(clock.now)
+        if len(clock.calls) == 1:
+            return httpx.Response(200, content=b'{"id": "x",\n' + b"\n" * 20, headers={"content-type": "application/json"})
+        return httpx.Response(200, json=COMPLETION)
+
+    with client_for(respond) as client:
+        assert request(client, clock).choices[0].message.content == '{"ok":true}'
+    events = repo.query("SELECT name, result FROM trace_events WHERE run_id=? AND name='llm_retry'", (clock.run_id,))
+    assert len(clock.calls) == 2 and json.loads(events[0]["result"])["error"] == "JSONDecodeError"
+
+
+def test_malformed_body_retry_is_bounded(clock):
+    def respond(req):
+        clock.calls.append(clock.now)
+        return httpx.Response(200, content=b"not json", headers={"content-type": "application/json"})
+
+    with client_for(respond) as client, pytest.raises(json.JSONDecodeError):
+        request(client, clock)
+    assert len(clock.calls) == llm_requests.MAX_RETRIES + 1
+
+
+def test_hung_call_hits_total_deadline_and_is_retried(clock, monkeypatch):
+    """Provider giữ kết nối mà không trả kết quả: hết hạn tổng thì thử lại, hết lượt thì báo lỗi rõ (không treo mãi)."""
+    import threading
+
+    monkeypatch.setattr(llm_requests, "CALL_DEADLINE_SECONDS", 0.05)
+    release = threading.Event()
+    calls = []
+
+    def hang(**kw):
+        calls.append(1)
+        release.wait(5)
+
+    client = SimpleNamespace(base_url=GOOGLE_URL, chat=SimpleNamespace(completions=SimpleNamespace(create=hang)))
+    with pytest.raises(llm_requests.LLMDeadlineError):
+        request(client, clock)
+    release.set()
+    assert len(calls) == llm_requests.MAX_RETRIES + 1
+    names = [e["name"] for e in repo.query("SELECT name FROM trace_events WHERE run_id=? AND name LIKE 'llm_retry%'", (clock.run_id,))]
+    assert names == ["llm_retry", "llm_retry", "llm_retry_exhausted"]
