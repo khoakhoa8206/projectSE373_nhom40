@@ -129,7 +129,7 @@ export default function App() {
   );
 }
 
-type Activity = { trip_id: string; running: number; waiting: string | null };
+type Activity = { trip_id: string; running: number; waiting: string | null; failed: number };
 const waitingFor = (kind: string) => ({
   itinerary_approval: t("duyệt lịch trình", "approve the itinerary"), ask_user: t("trả lời câu hỏi", "answer a question"),
   memory_save: t("chọn sở thích muốn lưu", "choose preferences to save"),
@@ -151,7 +151,8 @@ function BackgroundRuns({ hash }: { hash: string }) {
   const shown = items.filter((a) => !hash.startsWith(`/trips/${a.trip_id}`)); // trang chuyến đi đã có tiến trình riêng
   const running = shown.filter((a) => a.running);
   const waiting = shown.filter((a) => !a.running && a.waiting);
-  if (!running.length && !waiting.length) return null;
+  const failed = shown.filter((a) => !a.running && !a.waiting && a.failed);
+  if (!running.length && !waiting.length && !failed.length) return null;
   return (
     <div className="bg-runs" role="status" aria-live="polite">
       {running.length > 0 && (
@@ -165,6 +166,12 @@ function BackgroundRuns({ hash }: { hash: string }) {
       {waiting.map((a) => (
         <p key={a.trip_id}>
           {t("Agent đã xong, đang chờ bạn", "The agent is done and waiting for you to")} {waitingFor(a.waiting!)}.
+          <a href={`#/trips/${a.trip_id}`}>{t("Mở chuyến đi", "Open trip")}</a>
+        </p>
+      ))}
+      {failed.map((a) => (
+        <p key={a.trip_id} className="bg-runs-error">
+          {t("Agent gặp lỗi khi lập lịch, bạn có thể thử lại.", "The agent hit an error while planning; you can try again.")}
           <a href={`#/trips/${a.trip_id}`}>{t("Mở chuyến đi", "Open trip")}</a>
         </p>
       ))}

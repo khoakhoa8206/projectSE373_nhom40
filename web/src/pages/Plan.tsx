@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type ApiError, type TripProfile, type TripRow } from "../api";
 import type { Shell } from "../App";
-import { getLang, t } from "../i18n";
+import { getLang, poiName, t } from "../i18n";
+import { distanceM, nearestPoi, useSessionLocation } from "../location";
 import { Empty, go, interest, Skeleton, vnd } from "../ui";
 
 const STATUS: Record<string, [string, string]> = {
@@ -25,8 +26,10 @@ type Form = {
   mobility_notes: string;
 };
 
-function toProfile(f: Form): TripProfile {
+function toProfile(f: Form, start: { poi_id: string; name_vi: string } | null): TripProfile {
   return {
+    // Chỉ gửi POI gần vị trí người dùng nhất, không gửi toạ độ (quy tắc nhóm: không lưu vị trí chính xác).
+    hard_constraints: start ? [`Mỗi ngày xuất phát từ khu vực gần ${start.name_vi} (${start.poi_id}); ưu tiên các điểm gần đó vào đầu ngày`] : [],
     start_date: f.start_date,
     end_date: f.end_date,
     adults: f.adults,
@@ -73,7 +76,9 @@ export function PlanPage({ shell, preset }: { shell: Shell; preset: string }) {
       setBusy(false);
     }
   }
-  const submitForm = (e: FormEvent) => { e.preventDefault(); start("/ui/start-form", toProfile(form)); };
+  const here = useSessionLocation();
+  const origin = nearestPoi(here.coords, shell.pois);
+  const submitForm = (e: FormEvent) => { e.preventDefault(); start("/ui/start-form", toProfile(form, origin)); };
   const submitText = (e: FormEvent) => { e.preventDefault(); start("/ui/start-text", { text }); };
   const length = dayCount(form.start_date, form.end_date);
 
@@ -134,6 +139,19 @@ export function PlanPage({ shell, preset }: { shell: Shell; preset: string }) {
             {t("Ghi chú đi lại", "Mobility notes")}
             <input maxLength={500} placeholder={t("vd có người cao tuổi, ít đi bộ", "e.g. elderly traveller, little walking")} value={form.mobility_notes} onChange={(e) => set("mobility_notes", e.target.value)} />
           </label>
+          <div className="wide here-bar">
+            <span>{t("Điểm xuất phát", "Starting point")}</span>
+            {here.coords && origin ? (
+              <>
+                <span className="small">{t("Gần", "Near")} <b>{poiName(origin)}</b> ({(distanceM(here.coords, origin) / 1000).toFixed(1)} km)</span>
+                <button type="button" className="ghost" onClick={here.clear}>{t("Bỏ vị trí", "Remove location")}</button>
+              </>
+            ) : (
+              <button type="button" onClick={here.request} disabled={here.asking}>{here.asking ? t("Đang lấy vị trí...", "Getting location...") : t("Lấy vị trí hiện tại", "Use my current location")}</button>
+            )}
+            <small className="muted">{t("Agent chỉ nhận tên địa điểm gần bạn nhất, toạ độ ở lại trên máy này.", "The agent only gets the name of the nearest place; your coordinates stay on this device.")}</small>
+            {here.error && <p className="warn small" role="alert">{here.error}</p>}
+          </div>
           <button type="submit" className="wide primary">{busy ? t("Đang gửi...", "Sending...") : t("Lập lịch trình", "Plan itinerary")}</button>
         </fieldset>
       </form>

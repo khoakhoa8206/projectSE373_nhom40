@@ -5,6 +5,7 @@ import AgentStream from "../components/AgentStream";
 import ApprovalCard from "../components/ApprovalCard";
 import MapView, { DAY_COLORS } from "../MapView";
 import { getLang, poiName, t } from "../i18n";
+import { distanceM, nearestPoi, useSessionLocation } from "../location";
 import { ClaimBadge, Empty, go, interest, localIso, Photo, Skeleton, vnd } from "../ui";
 import { status } from "./Plan";
 
@@ -56,6 +57,18 @@ export default function TripPage({ id, run, shell }: { id: string; run: string |
   if (!d) return <div className="wrap page"><Skeleton rows={5} /></div>;
 
   const claimsOf = (slot: string) => d.claims.filter((c) => c.target_id === slot);
+  const lastPlan = d.runs.find((r) => r.uc === "UC-01" || r.uc === "UC-02");
+  const planFailed = lastPlan?.status === "failed" && !d.running && !d.pending;
+  async function planAgain() {
+    setError("");
+    try {
+      setStream((await api<{ run_id: string }>(`/trips/${id}/plan?background=true`, { method: "POST" })).run_id);
+      setResumes((n) => n + 1);
+      load();
+    } catch (e) {
+      setError((e as ApiError).message);
+    }
+  }
   return (
     <div className="wrap page">
       <p className="crumbs"><a href="#/trips">{t("Chuyến đi", "Trips")}</a> / {status(d.trip.status)}</p>
@@ -63,6 +76,15 @@ export default function TripPage({ id, run, shell }: { id: string; run: string |
       <Profile d={d} />
       {error && <p className="error" role="alert">{error}</p>}
       {d.pending && d.pending.kind !== "itinerary_approval" && <ApprovalCard payload={d.pending} busy={sending} onSubmit={decide} />}
+      {planFailed && (
+        <div className="note warn-note" role="alert">
+          <b>{t("Lượt lập lịch gần nhất bị lỗi.", "The last planning run failed.")}</b>{" "}
+          {d.itinerary
+            ? t("Lịch trình hiện tại vẫn giữ nguyên; bạn có thể gửi lại yêu cầu sửa bên dưới. Chi tiết ở tab Trace.",
+              "Your current itinerary is unchanged; you can resend the change request below. Details in the Trace tab.")
+            : lastPlan?.uc === "UC-02" && <button className="primary" onClick={planAgain}>{t("Lập lịch lại", "Plan again")}</button>}
+        </div>
+      )}
       {stream && <AgentStream key={`${stream}-${resumes}`} runId={stream} onInterrupt={load} onDone={load} onError={load} />}
 
       {d.itinerary ? (
@@ -102,6 +124,23 @@ function Profile({ d }: { d: TripDetail }) {
   return <div className="profile">{items.map((x) => <span key={String(x)} className="tag">{x}</span>)}</div>;
 }
 
+/** Sau mỗi sự kiện (đã đi, bỏ qua, chi tiêu, ghi chú) tóm tắt lại nhật ký ngày đó ở nền (UC-09), gộp các lần bấm
+ * liên tiếp trong 2,5 giây thành 1 lần gọi LLM. Hẹn giờ ở cấp module nên rời trang vẫn chạy. */
+const journalTimers = new Map<string, ReturnType<typeof setTimeout>>();
+function refreshJournal(tripId: string, day: number, done: () => void) {
+  const key = `${tripId}:${day}`;
+  clearTimeout(journalTimers.get(key));
+  journalTimers.set(key, setTimeout(() => {
+    journalTimers.delete(key);
+    api(`/trips/${tripId}/journal`, { json: { scope: "day", day_index: day, lang: getLang() } }).then(done, () => undefined);
+  }, 2500));
+}
+
+const EVENT: Record<string, [string, string]> = {
+  slot_done: ["Đã đi", "Visited"], slot_skipped: ["Bỏ qua", "Skipped"], expense: ["Chi tiêu", "Expense"], note: ["Ghi chú", "Note"],
+  photo_meta: ["Ảnh", "Photo"], adjustment: ["Điều chỉnh", "Adjustment"],
+};
+
 function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell: Shell; claimsOf: (s: string) => TripDetail["claims"]; reload: () => void; tripId: string }) {
   const it = d.itinerary!;
   const days = [...new Set(it.slots.map((s) => s.day_index))];
@@ -109,7 +148,12 @@ function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell:
   async function mark(s: Slot, type: "slot_done" | "slot_skipped") {
     await api(`/trips/${tripId}/events`, { json: { occurred_at: localIso(), day_index: s.day_index, event_type: type, slot_id: s.slot_id, payload: {} } });
     reload();
+    if (shell.llm) refreshJournal(tripId, s.day_index, reload);
   }
+  // Vị trí chỉ để vẽ chấm "bạn ở đây" và tìm điểm gần nhất ngay trên trình duyệt; không gửi lên máy chủ.
+  const here = useSessionLocation();
+  const stops = it.slots.flatMap((s) => (s.lat != null && s.lon != null ? [{ ...s, lat: s.lat, lon: s.lon }] : []));
+  const nearest = nearestPoi(here.coords, stops);
   return (
     <div className="plan-grid">
       <div>
@@ -159,8 +203,20 @@ function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell:
         })}
       </div>
       <div className="map-stick">
-        <MapView slots={it.slots} pois={[]} />
-        <p className="muted tiny">{t("Đường nét đứt nối các điểm theo thứ tự tham quan, không phải đường đi thực tế.", "Dashed lines connect stops in visiting order, not actual routes.")}</p>
+        <div className="here-bar">
+          {here.coords && nearest ? (
+            <>
+              <span className="small">{t("Gần bạn nhất trong lịch", "Closest stop to you")}: <b>{poiName(nearest)}</b>{" "}
+                ({(distanceM(here.coords, nearest) / 1000).toFixed(1)} km {t("đường chim bay", "as the crow flies")})</span>
+              <button className="ghost" onClick={here.clear}>{t("Tắt vị trí", "Turn off location")}</button>
+            </>
+          ) : (
+            <button onClick={here.request} disabled={here.asking}>{here.asking ? t("Đang lấy vị trí...", "Getting location...") : t("Lấy vị trí hiện tại", "Use my current location")}</button>
+          )}
+          {here.error && <p className="warn small" role="alert">{here.error}</p>}
+        </div>
+        <MapView slots={it.slots} pois={[]} here={here.coords} />
+        <p className="muted tiny">{t("Đường liền là đường đi thực tế bằng ô tô (định tuyến OSRM trên dữ liệu OSM). Nét đứt: chưa lấy được tuyến, chỉ nối thẳng theo thứ tự tham quan.", "Solid lines are real driving routes (OSRM routing on OSM data). Dashed: route unavailable, straight line in visiting order.")} {t("Vị trí của bạn chỉ hiện trên máy này, không gửi lên máy chủ.", "Your location stays on this device and is never sent to the server.")}</p>
       </div>
     </div>
   );
@@ -227,6 +283,7 @@ function JournalTab({ d, tripId, reload, llm }: { d: TripDetail; tripId: string;
       setAmount("");
       setNote("");
       reload();
+      if (llm) refreshJournal(tripId, day, reload);
     } catch (err) {
       setError((err as ApiError).message);
     }
@@ -258,7 +315,8 @@ function JournalTab({ d, tripId, reload, llm }: { d: TripDetail; tripId: string;
         {kind === "expense" && <label>{t("Số tiền (VND)", "Amount (VND)")}<input type="number" min={0} required value={amount} onChange={(e) => setAmount(e.target.value)} /></label>}
         <label>{t("Nội dung", "Details")}<input maxLength={500} required={kind === "note"} value={note} onChange={(e) => setNote(e.target.value)} /></label>
         <button>{t("Thêm", "Add")}</button>
-        <p className="muted tiny">{t(`Đã ghi ${d.events.length} sự kiện.`, `${d.events.length} events logged.`)}</p>
+        <p className="muted tiny">{t(`Đã ghi ${d.events.length} sự kiện.`, `${d.events.length} events logged.`)}{llm && t(" Nhật ký ngày tự tóm tắt lại vài giây sau mỗi sự kiện.", " The day's journal re-summarises a few seconds after each event.")}</p>
+        <EventLog d={d} />
       </form>
       <div>
         <div className="journal-head">
@@ -292,6 +350,30 @@ function JournalTab({ d, tripId, reload, llm }: { d: TripDetail; tripId: string;
         ))}
       </div>
     </div>
+  );
+}
+
+/** Nhật ký sự kiện: cập nhật ngay khi bấm Đã đi / Bỏ qua hoặc ghi chi tiêu, ghi chú (không cần LLM). */
+function EventLog({ d }: { d: TripDetail }) {
+  if (!d.events.length) return <p className="muted small">{t("Chưa có sự kiện. Bấm Đã đi / Bỏ qua ở tab Lịch trình hoặc ghi chi tiêu, ghi chú ở trên.", "No events yet. Mark stops as Visited / Skip in the Itinerary tab, or log an expense or note above.")}</p>;
+  const slotName = (id: string | null) => { const s = d.itinerary?.slots.find((x) => x.slot_id === id); return s ? poiName(s) : ""; };
+  return (
+    <section className="event-log" aria-label={t("Nhật ký sự kiện", "Event log")}>
+      <h3>{t("Nhật ký sự kiện", "Event log")}</h3>
+      <ol className="timeline">
+        {[...d.events].reverse().map((e) => {
+          const label = EVENT[e.event_type];
+          const place = poiName(e) || slotName(e.slot_id);
+          const text = e.payload?.text ?? e.payload?.label;
+          return (
+            <li key={e.event_id}>
+              <time>{t("Ngày", "Day")} {e.day_index} · {e.occurred_at.slice(11, 16)}</time> <b>{label ? t(...label) : e.event_type}</b>
+              {place && `: ${place}`}{e.amount_vnd != null && ` · ${vnd(e.amount_vnd)}`}{text && ` · ${text}`}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 

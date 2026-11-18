@@ -8,6 +8,7 @@ import os
 import secrets
 import sqlite3
 import threading
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from dotenv import load_dotenv
@@ -44,7 +45,13 @@ def check_password(password: str, stored: str) -> bool:
 
 DUMMY_HASH = hash_password(secrets.token_hex(16))  # email chưa đăng ký vẫn băm 1 lần: không lộ email qua thời gian phản hồi
 
-app = FastAPI(title="Tour Guide Agent API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_app):
+    recover_runs()  # định nghĩa ở dưới; chạy khi server khởi động, không chạy lúc import
+    yield
+
+
+app = FastAPI(title="Tour Guide Agent API", version="0.1.0", lifespan=lifespan)
 # ponytail: thiếu SESSION_SECRET thì sinh ngẫu nhiên → restart server là phải chọn lại người dùng
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET") or secrets.token_hex(32))
 
@@ -76,6 +83,32 @@ def own_run(run_id, user_id):
 def start(fn, *args, **kwargs):
     """Chạy graph ở thread nền; mọi kết quả/lỗi đã nằm trong runs + trace_events, PWA đọc qua stream."""
     threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True).start()
+
+
+def _fail_run(run_id):
+    repo.log_event(run_id, "recovery", "error", error="Backend khởi động lại giữa lượt chạy; hãy thử lại")
+    repo.query("UPDATE runs SET status = 'failed', ended_at = ? WHERE run_id = ?", (repo.now(), run_id))
+
+
+def _continue_or_fail(run_id, trip_id):
+    if graph.continue_run(trip_id) is None:
+        _fail_run(run_id)
+
+
+def recover_runs():
+    """Backend khởi động lại khi còn lượt chạy dở (tắt máy, sập): thread cũ đã mất nên runs kẹt ở 'running' mãi.
+    UC-01/02 có checkpoint → chạy tiếp đúng node ở nền (continue_run); UC-03/09/11 không có checkpoint → đánh dấu lỗi
+    để PWA thôi chờ, người dùng bấm lại."""
+    try:
+        stale = repo.query("SELECT run_id, uc, trip_id FROM runs WHERE status = 'running'")
+    except sqlite3.OperationalError:  # chưa có DB (chạy uvicorn trước make db)
+        return
+    for r in stale:
+        if r["uc"] in ("UC-01", "UC-02"):
+            start(_continue_or_fail, r["run_id"], r["trip_id"])
+        else:
+            _fail_run(r["run_id"])
+
 
 
 def _parse(s):
@@ -241,8 +274,14 @@ def revise_trip(trip_id: str, body: ReviseIn, user_id: str = Depends(current_use
     previous = Itinerary.model_validate(it | {"has_unpriced_item": bool(it["has_unpriced_item"])})
     repo.query("UPDATE trips SET status = 'planning', updated_at = ? WHERE trip_id = ?", (repo.now(), trip_id))
     run_id = repo.create_run("UC-02", trip_id, user_id)
-    start(graph.run_uc02, trip_id, user_id, run_id=run_id, approval=True, revise=(previous, body.note.strip()))
+    start(_revise, trip_id, user_id, run_id, previous, body.note.strip())
     return {"run_id": run_id, "status": "running"}
+
+
+def _revise(trip_id, user_id, run_id, previous, note):
+    if graph.run_uc02(trip_id, user_id, run_id=run_id, approval=True, revise=(previous, note))["error"]:
+        # lượt sửa lỗi trước khi lưu bản mới: bản đã duyệt vẫn là bản hiện hành, trả chuyến về 'approved'
+        repo.query("UPDATE trips SET status = 'approved', updated_at = ? WHERE trip_id = ?", (repo.now(), trip_id))
 
 
 class MessageIn(BaseModel):

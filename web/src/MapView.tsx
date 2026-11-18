@@ -1,6 +1,6 @@
 import L from "leaflet";
 import { useEffect, useRef } from "react";
-import type { Poi, Slot } from "./api";
+import { api, type Poi, type Slot } from "./api";
 import { getLang, poiName, t } from "./i18n";
 import type { Coords } from "./location";
 
@@ -67,12 +67,22 @@ export default function MapView({ slots, pois, here }: { slots: Slot[]; pois: Po
   useEffect(() => {
     const group = layer.current!;
     group.clearLayers();
+    let alive = true;
     const all: L.LatLngTuple[] = [];
     for (const day of new Set(slots.map((s) => s.day_index))) {
       const color = DAY_COLORS[(day - 1) % DAY_COLORS.length];
       const stops = slots.filter((s) => s.day_index === day && s.lat != null && s.lon != null);
       const pts = stops.map((s) => [s.lat!, s.lon!] as L.LatLngTuple);
-      L.polyline(pts, { color, weight: 3, opacity: 0.7, dashArray: "6 6" }).addTo(group);
+      // Vẽ ngay nét đứt nối thẳng; lấy được tuyến OSRM (đường đi thực tế) thì thay bằng đường liền.
+      const line = L.polyline(pts, { color, weight: 3, opacity: 0.7, dashArray: "6 6" }).addTo(group);
+      const ids = stops.map((s) => s.poi_id);
+      if (ids.length >= 2 && ids.every(Boolean)) {
+        api<{ coordinates: L.LatLngTuple[] | null }>(`/ui/route?pois=${encodeURIComponent(ids.join(","))}`).then((r) => {
+          if (!alive || !r.coordinates) return;
+          line.setLatLngs(r.coordinates);
+          line.setStyle({ dashArray: undefined, weight: 4, opacity: 0.85 });
+        }, () => undefined);
+      }
       stops.forEach((s, i) => {
         const icon = L.divIcon({ className: "pin", html: `<span style="background:${color}">${i + 1}</span>`, iconSize: [26, 26] });
         L.marker(pts[i], { icon, title: poiName(s) || s.activity }).bindPopup(popup(s)).addTo(group);
@@ -80,6 +90,7 @@ export default function MapView({ slots, pois, here }: { slots: Slot[]; pois: Po
       all.push(...pts);
     }
     if (all.length) map.current!.fitBounds(all, { padding: [30, 30], maxZoom: 15 });
+    return () => { alive = false; };
   }, [slots, lang]);
 
   return <div ref={el} className="map" role="region" aria-label={t("Bản đồ lịch trình", "Itinerary map")} />;

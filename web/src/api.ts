@@ -22,7 +22,10 @@ export type Claim = {
 
 export type Finding = { slot_ref: string | null; severity: "low" | "medium" | "high"; rule: string; message: string; suggestion: string | null };
 export type Report = { report_id: number; round: number; reviewer: "local_expert" | "budget" | "safety"; verdict: "approve" | "request_changes"; findings: Finding[] };
-export type TripEvent = { event_id: string; day_index: number; event_type: string; slot_id: string | null; amount_vnd: number | null; payload: string };
+export type TripEvent = {
+  event_id: string; occurred_at: string; day_index: number; event_type: string; slot_id: string | null; poi_id: string | null;
+  name_vi: string | null; name_en: string | null; amount_vnd: number | null; payload: { text?: string; label?: string };
+};
 export type Journal = { scope: "day" | "trip"; day_index: number | null; lang: "vi" | "en"; content: { summary: string; highlights: { text: string }[] }; event_ids: string[]; total_spent_vnd: number; tokens_before: number | null; tokens_after: number | null; run_id: string };
 export type RunRow = { run_id: string; uc: string; status: string; started_at: string; latency_ms: number | null; tokens_in: number; tokens_out: number };
 
@@ -54,6 +57,7 @@ export type TripProfile = {
   pace: "relaxed" | "moderate" | "packed" | null;
   language: "vi" | "en";
   mobility_notes: string | null;
+  hard_constraints?: string[];
 };
 
 export type Slot = {

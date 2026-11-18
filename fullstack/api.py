@@ -3,12 +3,14 @@ Chỉ gom dữ liệu để hiển thị; lập lịch, duyệt, bộ nhớ, thu
 Người dùng luôn lấy từ session cookie, không bao giờ từ body. Chạy bằng run.py ở gốc app/."""
 
 import csv
+import functools
 import json
 import os
 import re
 import threading
 from pathlib import Path
 
+import httpx
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -159,15 +161,60 @@ def my_trips(user_id: str = Depends(current_user)):
     )
 
 
+# Cùng nguồn/profile với travel_matrix (scripts/build_travel_matrix.py). Máy chủ demo công cộng hay chập chờn
+# (18/11 router.project-osrm.org hết thời gian kết nối) nên thử lần lượt, máy chủ FOSSGIS làm dự phòng.
+OSRM_URLS = ("https://router.project-osrm.org/route/v1/driving", "https://routing.openstreetmap.de/routed-car/route/v1/driving")
+
+
+# ponytail: cache trong process (512 tuyến), restart là hỏi lại OSRM; cần chạy offline thì lưu tuyến vào data/ như ma trận
+@functools.lru_cache(maxsize=512)
+def _osrm_route(points: tuple[tuple[float, float], ...]) -> dict:
+    coords = ";".join(f"{lon},{lat}" for lat, lon in points)
+    for i, base in enumerate(OSRM_URLS):
+        try:
+            r = httpx.get(f"{base}/{coords}", params={"overview": "full", "geometries": "geojson"},
+                          timeout=httpx.Timeout(15, connect=10),
+                          follow_redirects=False)  # fmt: skip
+            r.raise_for_status()
+            route = r.json()["routes"][0]
+            break
+        except (httpx.HTTPError, KeyError, IndexError, ValueError):
+            if i == len(OSRM_URLS) - 1:
+                raise
+    return {"coordinates": [[lat, lon] for lon, lat in route["geometry"]["coordinates"]],
+            "distance_m": round(route["distance"]), "duration_min": round(route["duration"] / 60)}  # fmt: skip
+
+
+@app.get("/api/ui/route")
+def route(pois: str, user_id: str = Depends(current_user)):
+    """Đường đi thực tế (OSRM, ô tô) qua các POI theo thứ tự. Chỉ gửi toạ độ POI công khai, không bao giờ gửi vị trí
+    người dùng. OSRM lỗi / mất mạng → coordinates = null, bản đồ vẽ nét đứt nối thẳng và ghi rõ."""
+    ids = pois.split(",")
+    if not 2 <= len(ids) <= 25:
+        raise HTTPException(422, "Cần 2–25 poi_id")
+    rows = {r["poi_id"]: r for r in repo.query(
+        f"SELECT poi_id, lat, lon FROM pois WHERE poi_id IN ({','.join('?' * len(ids))})", ids)}  # fmt: skip
+    if any(i not in rows for i in ids):
+        raise HTTPException(404, "Không tìm thấy POI")
+    try:
+        return _osrm_route(tuple((rows[i]["lat"], rows[i]["lon"]) for i in ids)) | {"source": "osrm"}
+    except (httpx.HTTPError, KeyError, IndexError, ValueError):
+        return {"coordinates": None, "source": None}
+
+
 @app.get("/api/ui/activity")
 def activity(user_id: str = Depends(current_user)):
-    """Chuyến có agent đang chạy nền hoặc đang chờ người dùng: PWA hiện thanh báo ở mọi trang."""
+    """Chuyến có agent đang chạy nền, đang chờ người dùng, hoặc lượt lập lịch gần nhất bị lỗi (không im lặng biến mất):
+    PWA hiện thanh báo ở mọi trang."""
     return repo.query(
         """SELECT t.trip_id,
                EXISTS (SELECT 1 FROM runs r WHERE r.trip_id = t.trip_id AND r.status = 'running') AS running,
                (SELECT kind FROM approvals a WHERE a.trip_id = t.trip_id AND a.decision = 'pending'
-                ORDER BY a.created_at LIMIT 1) AS waiting
-           FROM trips t WHERE t.user_id = ? AND (running OR waiting IS NOT NULL) ORDER BY t.updated_at DESC""",
+                ORDER BY a.created_at LIMIT 1) AS waiting,
+               (SELECT r.status FROM runs r WHERE r.trip_id = t.trip_id AND r.uc IN ('UC-01', 'UC-02')
+                ORDER BY r.started_at DESC, r.rowid DESC LIMIT 1) = 'failed' AS failed
+           FROM trips t WHERE t.user_id = ? AND (running OR waiting IS NOT NULL OR failed)
+           ORDER BY t.updated_at DESC""",
         (user_id,),
     )
 

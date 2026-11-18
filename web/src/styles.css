@@ -53,7 +53,13 @@ button.link { padding: 0; border: 0; background: none; color: var(--brand-dark);
 .bg-runs { background: #fff7ed; border-bottom: 1px solid #fed7aa; padding: 8px 20px; font-size: .92rem; }
 .bg-runs p { max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .bg-runs a { font-weight: 600; }
+.bg-runs-error { color: var(--err); }
+.warn-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .revise { margin-top: 24px; }
+.here-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+.here-bar .warn, .here-bar small { width: 100%; margin: 0; }
+.event-log { margin-top: 8px; }
+.event-log .timeline { max-height: 320px; overflow-y: auto; }
 .nav-bottom { display: none; }
 
 .hero { position: relative; height: min(68vh, 560px); min-height: 420px; overflow: hidden; color: #fff; }

@@ -56,7 +56,7 @@ export default function ItineraryPage({ itinerary }: { itinerary: Itinerary }) {
       <ul className="slots-list">{slots.map((slot) => <SlotRow key={slot.slot_id} slot={slot} />)}</ul>
     </div>
     <MapView slots={itinerary.slots} pois={[]} />
-    <p className="muted small">{t("Đường nối thứ tự tham quan, không phải đường đi thực tế.", "Lines show visiting order, not actual routes.")}</p>
+    <p className="muted small">{t("Đường liền là đường đi thực tế bằng ô tô (định tuyến OSRM trên dữ liệu OSM). Nét đứt: chưa lấy được tuyến, chỉ nối thẳng theo thứ tự tham quan.", "Solid lines are real driving routes (OSRM routing on OSM data). Dashed: route unavailable, straight line in visiting order.")}</p>
     <ul className="map-legend" aria-label={t("Chú giải màu bản đồ", "Map colour legend")}>
       {days.map((day) => <li key={day}><span className="dot" style={{ background: DAY_COLORS[(day - 1) % DAY_COLORS.length] }} />{t("Ngày", "Day")} {day}</li>)}
     </ul>

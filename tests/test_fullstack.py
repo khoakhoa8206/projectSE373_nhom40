@@ -94,3 +94,41 @@ def test_by_line_keeps_claims_when_text_was_replaced():
 
     claim = {"claim_text": "9h", "corrected_text": "08:30"}
     assert by_line("Thông tin đã bị chặn.", [claim])[0]["claims"] == [claim]
+
+
+def test_route_uses_osrm_geometry_and_falls_back_when_offline(client, monkeypatch):
+    import httpx
+
+    from fullstack import api as ui
+
+    login(client, "u-ha")
+    ui._osrm_route.cache_clear()
+    sent = []
+
+    def fake_get(url, **kw):
+        sent.append(url)
+        geometry = {"coordinates": [[107.5446, 16.4535], [107.56, 16.46], [107.5778, 16.4695]]}
+        return httpx.Response(200, json={"routes": [{"geometry": geometry, "distance": 4321.4, "duration": 600}]},
+                              request=httpx.Request("GET", url))  # fmt: skip
+
+    monkeypatch.setattr(ui.httpx, "get", fake_get)
+    r = client.get("/api/ui/route", params={"pois": "hue-chua-thien-mu,hue-dai-noi"}).json()
+    assert r["source"] == "osrm" and r["coordinates"][1] == [16.46, 107.56] and r["duration_min"] == 10
+    assert sent[0].startswith(ui.OSRM_URLS[0]) and "107.54461,16.45355;" in sent[0]  # chỉ toạ độ POI, lon trước lat
+
+    def first_down(url, **kw):  # máy chủ chính chết → dùng máy chủ dự phòng
+        if url.startswith(ui.OSRM_URLS[0]):
+            raise httpx.ConnectTimeout("timed out")
+        return fake_get(url, **kw)
+
+    monkeypatch.setattr(ui.httpx, "get", first_down)
+    r = client.get("/api/ui/route", params={"pois": "hue-dai-noi,hue-chua-thien-mu"}).json()
+    assert r["source"] == "osrm" and sent[-1].startswith(ui.OSRM_URLS[1])
+
+    def offline(url, **kw):
+        raise httpx.ConnectError("mất mạng")
+
+    monkeypatch.setattr(ui.httpx, "get", offline)
+    assert client.get("/api/ui/route", params={"pois": "hue-dai-noi,hue-lang-tu-duc"}).json() == {"coordinates": None, "source": None}
+    assert client.get("/api/ui/route", params={"pois": "hue-dai-noi"}).status_code == 422
+    assert client.get("/api/ui/route", params={"pois": "hue-dai-noi,khong-co"}).status_code == 404
