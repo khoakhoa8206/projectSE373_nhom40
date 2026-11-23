@@ -7,6 +7,7 @@
 - Nhánh `feat/<mã task>` (vd `feat/P2-3`), mỗi task là 1 GitHub Issue.
 - Đọc/ghi DB qua `agent/db/repo.py`; thêm hàm vào đó thay vì mở kết nối riêng. DB lấy từ biến môi trường `DB_PATH`.
 - Ghi log agent qua `repo.log_event(...)`: hàm này tự làm thô lat/lon và ghi song song `traces/<run_id>.jsonl`.
+- Commit trace mẫu (`scripts/export_trace.py`) hay `results/run*` thì chạy `python scripts/scan_coords.py` trước: phải ra 0 (CI cũng chạy).
 - Tool nào ghi DB thì nhận tham số `run_id` (harness tự truyền, LLM không thấy tham số này).
 - Dùng công cụ AI để code thì ghi vào `docs/ai_usage.md`.
 
