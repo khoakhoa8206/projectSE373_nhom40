@@ -6,6 +6,7 @@ from agent.db import repo
 from agent.db.init import init_db
 
 os.environ.setdefault("ALLOW_FICTIONAL_LOGIN", "1")  # test vào thẳng người dùng hư cấu qua POST /api/session
+os.environ.setdefault("REVIEW_AGENTS", "0")  # test API cũ dùng LLM giả của planner; UC-06 có test riêng (test_uc06_review)
 
 
 @pytest.fixture

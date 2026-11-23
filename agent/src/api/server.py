@@ -29,6 +29,7 @@ from agent.src.nodes.narrate import run_uc03
 
 load_dotenv()
 FICTIONAL_IDS = {user_id for user_id, _, _ in FICTIONAL_USERS}
+REVIEW = os.environ.get("REVIEW_AGENTS", "1") != "0"  # UC-06 trên PWA; REVIEW_AGENTS=0 khi LLM quá chậm lúc demo
 SCRYPT = (2**14, 8, 1)  # n, r, p: khoảng 16 MB RAM và vài chục ms mỗi lần băm
 
 
@@ -218,9 +219,9 @@ def plan_trip(trip_id: str, background: bool = False, user_id: str = Depends(cur
     repo.query("UPDATE trips SET status = 'planning', updated_at = ? WHERE trip_id = ?", (repo.now(), trip_id))
     if background:
         run_id = repo.create_run("UC-02", trip_id, user_id)
-        start(graph.run_uc02, trip_id, user_id, run_id=run_id, approval=True)
+        start(graph.run_uc02, trip_id, user_id, run_id=run_id, approval=True, review=REVIEW)
         return {"run_id": run_id, "status": "running"}
-    result = graph.run_uc02(trip_id, user_id, approval=True)
+    result = graph.run_uc02(trip_id, user_id, approval=True, review=REVIEW)
     if result["error"]:
         raise HTTPException(500, result)
     return result
@@ -280,7 +281,7 @@ def revise_trip(trip_id: str, body: ReviseIn, user_id: str = Depends(current_use
 
 
 def _revise(trip_id, user_id, run_id, previous, note):
-    if graph.run_uc02(trip_id, user_id, run_id=run_id, approval=True, revise=(previous, note))["error"]:
+    if graph.run_uc02(trip_id, user_id, run_id=run_id, approval=True, revise=(previous, note), review=REVIEW)["error"]:
         # lượt sửa lỗi trước khi lưu bản mới: bản đã duyệt vẫn là bản hiện hành, trả chuyến về 'approved'
         repo.query("UPDATE trips SET status = 'approved', updated_at = ? WHERE trip_id = ?", (repo.now(), trip_id))
 
@@ -303,7 +304,7 @@ def post_message(trip_id: str, body: MessageIn, user_id: str = Depends(current_u
     else:
         repo.add_message(trip_id, user_id, "user", body.text)
         run_id = repo.create_run("UC-01", trip_id, user_id)
-        start(graph.run_uc01, trip_id, user_id, run_id=run_id)
+        start(graph.run_uc01, trip_id, user_id, run_id=run_id, review=REVIEW)
     return {"run_id": run_id, "status": "running"}
 
 
