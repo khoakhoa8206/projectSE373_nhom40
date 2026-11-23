@@ -1,6 +1,8 @@
 import { useRef, type ReactNode } from "react";
-import type { Claim, Poi } from "./api";
+import type { Poi } from "./api";
 import { getLang, locale, poiName, t } from "./i18n";
+
+export { ClaimBadge } from "./components/ClaimBadge"; // W10-P4-3: trang cũ vẫn import từ ui
 
 export const vnd = (n: number) => (getLang() === "en" ? `${n.toLocaleString(locale())} VND` : `${n.toLocaleString(locale())} đ`);
 export const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/gi, "d").toLowerCase();
@@ -79,22 +81,6 @@ export function Carousel({ title, sub, pois }: { title: string; sub?: string; po
       </div>
       <div className="rail-track" ref={track}>{pois.map((p) => <PoiCard key={p.poi_id} poi={p} />)}</div>
     </section>
-  );
-}
-
-const CLAIM_LABEL: Record<Claim["claim_type"], [string, string]> = {
-  opening_hours: ["Giờ", "Hours"], price: ["Giá", "Price"], festival_date: ["Ngày lễ", "Festival date"], weather: ["Thời tiết", "Weather"], distance: ["Di chuyển", "Travel"],
-};
-
-/** UC-11: claim sai không bao giờ hiện giá trị sai, chỉ hiện giá trị đã sửa theo nguồn. */
-export function ClaimBadge({ c }: { c: Claim }) {
-  const label = t(...CLAIM_LABEL[c.claim_type]);
-  if (c.status === "contradicted") return <span className="tag fixed">{label}: {t("đã sửa theo nguồn", "corrected from source")}, {c.corrected_text}</span>;
-  if (c.status === "unverified") return <span className="tag warn">{label}: {t("chưa xác minh", "not verified")}</span>;
-  return (
-    <a className="tag ok" href={c.source_url ?? undefined} target="_blank" rel="noreferrer" title={t(`Xác minh ngày ${c.verified_at?.slice(0, 10) ?? ""}`, `Verified on ${c.verified_at?.slice(0, 10) ?? ""}`)}>
-      {label}: {t("đã xác minh", "verified")}
-    </a>
   );
 }
 

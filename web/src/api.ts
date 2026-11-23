@@ -18,6 +18,7 @@ export type PoiDetail = Poi & {
 export type Claim = {
   claim_type: "opening_hours" | "price" | "festival_date" | "weather" | "distance"; claim_text: string; target_id?: string;
   status: "verified" | "unverified" | "contradicted"; source_url: string | null; verified_at: string | null; corrected_text: string | null;
+  evidence_kind?: "tool" | "kb" | null; // bảng claims: nguồn là dữ liệu điểm đến (tool) hay kho tri thức (kb)
 };
 
 export type Finding = { slot_ref: string | null; severity: "low" | "medium" | "high"; rule: string; message: string; suggestion: string | null };

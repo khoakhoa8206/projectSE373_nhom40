@@ -179,6 +179,11 @@ button.link { padding: 0; border: 0; background: none; color: var(--brand-dark);
 .tag.warn { background: #fef3c7; color: var(--warn); }
 .tag.ok { background: #dcfce7; color: var(--ok-text); font-weight: 500; }
 .tag.fixed { background: #dbeafe; color: var(--fixed); }
+/* ClaimBadge (W10-P4-3): nhãn là nút, bấm mở ô nguồn ngay dưới nhãn */
+.claim { position: relative; display: inline-block; }
+.claim > button.tag { border: 0; padding: 2px 10px; font: inherit; font-size: .8rem; line-height: 1.55; }
+.claim > button.tag:hover { transform: none; filter: brightness(.96); }
+.claim-pop { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; display: grid; gap: 2px; width: max-content; max-width: min(320px, calc(100vw - 32px)); padding: 8px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); font-size: .82rem; color: var(--ink); }
 .tags, .profile { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .empty { text-align: center; padding: 40px 16px; background: var(--soft); border-radius: 16px; margin: 16px 0; }
 
