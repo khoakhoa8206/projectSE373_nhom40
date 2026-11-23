@@ -3,7 +3,10 @@
 __pycache__/
 *.db
 *.db-journal
-results/
+# run có tên (evals.run --name run1) được commit, trừ *.db
+results/*
+!results/run1/
+!results/run2/
 traces/*.jsonl
 kb/index/
 node_modules/
