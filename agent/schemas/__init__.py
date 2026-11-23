@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = "0.3"  # 0.2: thêm TripEvent (UC-09) · 0.3: thêm Claim (UC-11)
+SCHEMA_VERSION = "0.4"  # 0.2: thêm TripEvent (UC-09) · 0.3: thêm Claim (UC-11) · 0.4: ReviewReport (UC-06)
 
 HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
 
@@ -112,6 +112,21 @@ class Violation(BaseModel):
     severity: Literal["low", "medium", "high"]
     slot_id: str | None = None  # None = vi phạm cấp ngày/chuyến (vd ngân sách)
     message: str
+
+
+class ReviewFinding(BaseModel):
+    slot_ref: str | None = None  # slot_id có thật trong lịch trình đang review; None = cả chuyến (vd tổng chi)
+    severity: Literal["low", "medium", "high"]
+    rule: str = Field(min_length=1)  # vd opening_hours, order, budget_total, restricted_area, child_safety
+    message: str = Field(min_length=1)
+    suggestion: str | None = None
+
+
+class ReviewReport(BaseModel):
+    """Structured output của 1 reviewer UC-06 (local_expert / budget / safety)."""
+
+    verdict: Literal["approve", "request_changes"]
+    findings: list[ReviewFinding] = []
 
 
 COORD_KEYS = {"lat", "lon", "lng", "latitude", "longitude", "gps", "geo", "coords", "coordinates"}

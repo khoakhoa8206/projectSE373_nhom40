@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic_core import to_jsonable_python
 
-from agent.schemas import POI, Itinerary, TripEvent, TripProfile, Violation
+from agent.schemas import POI, Itinerary, ReviewReport, TripEvent, TripProfile, Violation
 from agent.src.obs.trace import mask_coords, write_jsonl
 
 VN = timezone(timedelta(hours=7))  # Việt Nam không có giờ mùa hè
@@ -160,9 +160,9 @@ def save_itinerary(it: Itinerary, history: list[tuple[int, Violation]]):
         ).fetchone()[0]
         conn.execute("UPDATE itineraries SET status = 'superseded' WHERE trip_id = ?", (it.trip_id,))
         conn.execute(
-            """INSERT INTO itineraries (itinerary_id, trip_id, profile_id, version, status, planner_rounds,
-                   total_cost_vnd, has_unpriced_item, run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (it.itinerary_id, it.trip_id, it.profile_id, version, it.status, it.planner_rounds,
+            """INSERT INTO itineraries (itinerary_id, trip_id, profile_id, version, status, planner_rounds, review_rounds,
+                   total_cost_vnd, has_unpriced_item, run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (it.itinerary_id, it.trip_id, it.profile_id, version, it.status, it.planner_rounds, it.review_rounds,
              # tổng các khoản đã biết giá; có khoản thiếu giá thì has_unpriced_item = 1 (UI ghi "chưa có giá")
              sum(s.cost_vnd or 0 for s in it.slots), int(any(s.cost_source == "unverified" for s in it.slots)),
              it.run_id, now()),
@@ -182,6 +182,29 @@ def save_itinerary(it: Itinerary, history: list[tuple[int, Violation]]):
         conn.execute(
             "UPDATE trips SET status = 'awaiting_approval', updated_at = ? WHERE trip_id = ?", (now(), it.trip_id)
         )
+
+
+def save_review(itinerary_id, round_, reviewer, report: ReviewReport, run_id):
+    """UC-06: ghi 1 review_reports + các review_findings (slot_ref đã được orchestrator kiểm là slot có thật)."""
+    with closing(get_conn()) as conn, conn:
+        report_id = conn.execute(
+            "INSERT INTO review_reports (itinerary_id, round, reviewer, verdict, run_id, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?) RETURNING report_id",
+            (itinerary_id, round_, reviewer, report.verdict, run_id, now()),
+        ).fetchone()[0]
+        conn.executemany(
+            "INSERT INTO review_findings (report_id, slot_ref, severity, rule, message, suggestion) VALUES (?, ?, ?, ?, ?, ?)",
+            [(report_id, f.slot_ref, f.severity, f.rule, f.message, f.suggestion) for f in report.findings],
+        )
+    return report_id
+
+
+def reviews_for_itinerary(itinerary_id):
+    """Các báo cáo review (mọi vòng) của 1 lịch trình kèm findings, cho màn hình Review."""
+    reports = query("SELECT * FROM review_reports WHERE itinerary_id = ? ORDER BY round, reviewer", (itinerary_id,))
+    for r in reports:
+        r["findings"] = query("SELECT * FROM review_findings WHERE report_id = ? ORDER BY finding_id", (r["report_id"],))
+    return reports
 
 
 def itinerary_for_trip(trip_id):
