@@ -1,4 +1,4 @@
-"""Eval runner: python -m evals.run --uc UC-02 [--uc UC-03 ...] | python -m evals.run --all
+"""Eval runner: python -m evals.run --uc UC-02 [--uc UC-03 ...] | python -m evals.run --all  [--name run1]
 
 Plug-in (W9-P1-3): mỗi UC là 1 thư mục evals/<uc>/ (vd evals/uc01/) có
     cases.jsonl   mỗi dòng 1 case, bắt buộc case_id; tuỳ chọn weather_mode (mặc định normal), fixture (.sql hư cấu)
@@ -135,6 +135,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--uc", action="append", default=[], help="vd UC-02; lặp lại để chạy nhiều UC")
     ap.add_argument("--all", action="store_true", help="chạy mọi UC đã có plug-in trong evals/")
+    ap.add_argument("--name", help="vd run1: ghi vào results/run1/<uc>/ (được commit, xem trang Eval)")
     args = ap.parse_args()
     ucs = plugins() if args.all else [uc.lower().replace("-", "") for uc in args.uc]  # UC-02 -> uc02
     if not ucs:
@@ -145,7 +146,12 @@ def main():
         sys.exit(f"Cổng {MOCK_PORT} đang bận: tắt mock-weather đang chạy (make dev) rồi chạy lại.")
 
     stamp = f"{datetime.now():%Y%m%d-%H%M%S}"
-    if len(ucs) == 1:
+    if args.name:  # run có tên (run1, run2) được commit; mỗi người chạy UC của mình vào cùng 1 run, không ghi đè
+        root = Path("results") / args.name
+        if done := [uc for uc in ucs if (root / uc).exists()]:
+            sys.exit(f"{root} đã có {', '.join(done)}: không ghi đè, xoá thư mục đó nếu thật sự muốn chạy lại.")
+        totals = {uc: run_uc(uc, root / uc) for uc in ucs}
+    elif len(ucs) == 1:
         totals = {ucs[0]: run_uc(ucs[0], Path("results") / f"{ucs[0]}-{stamp}")}
     else:
         root = Path("results") / f"all-{stamp}"
