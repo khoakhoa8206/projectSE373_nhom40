@@ -60,8 +60,15 @@ def revoke_sensitive_consent(user_id):
 
 
 def expire_memory():
-    """Job dọn: xoá cứng mục đã hết hạn (mọi user). Gọi mỗi lần đọc, đủ rẻ cho SQLite."""
-    repo.query("DELETE FROM memory_items WHERE expires_at <= ?", (repo.now(),))
+    """Job dọn: xoá cứng mục đã hết hạn (mọi user, kể cả mục đã xoá mềm). Trả số mục đã xoá."""
+    return len(repo.query("DELETE FROM memory_items WHERE expires_at <= ? RETURNING memory_id", (repo.now(),)))
+
+
+def expire_loop(stop, every_s=3600):
+    """Job chạy nền trong backend: mỗi giờ dọn 1 lần (lần đầu do lifespan gọi đồng bộ lúc khởi động).
+    memory_read vẫn gọi expire_memory nên mục quá hạn không bao giờ được đọc ra kể cả giữa 2 lần chạy job."""
+    while not stop.wait(every_s):
+        expire_memory()
 
 
 def memory_write(user_id, kind, value, sensitivity="normal", source_trip_id=None, source_message_id=None):

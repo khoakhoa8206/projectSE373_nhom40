@@ -74,3 +74,16 @@ def test_memory_api_is_scoped_to_session_user(db):
     got = ha.post("/api/memory/consent/revoke").json()
     assert [m["kind"] for m in got["items"]] == ["interest"] and not got["sensitive_consent"]
     assert ha.delete(f"/api/memory/{mid}").json()["items"] == []
+
+
+def test_backend_startup_job_purges_expired_without_any_read(db):
+    from fastapi.testclient import TestClient
+
+    from agent.src.api import server
+
+    old, fresh = store.memory_write("u-ha", "pace", "relaxed"), store.memory_write("u-minh", "interest", "lịch sử")
+    repo.query("UPDATE memory_items SET expires_at = '2000-01-01T00:00:00+07:00', deleted_at = '2000-01-01' WHERE memory_id = ?",
+               (old,))  # fmt: skip — mục đã xoá mềm vẫn phải bị xoá cứng khi hết hạn
+    with TestClient(server.app):  # lifespan chạy job, không gọi memory_read
+        pass
+    assert [r["memory_id"] for r in repo.query("SELECT memory_id FROM memory_items")] == [fresh]

@@ -49,7 +49,11 @@ DUMMY_HASH = hash_password(secrets.token_hex(16))  # email chưa đăng ký vẫ
 @asynccontextmanager
 async def lifespan(_app):
     recover_runs()  # định nghĩa ở dưới; chạy khi server khởi động, không chạy lúc import
+    store.expire_memory()  # UC-07: xoá cứng mục hết hạn ngay lúc khởi động, rồi mỗi giờ ở luồng nền
+    stop = threading.Event()
+    threading.Thread(target=store.expire_loop, args=(stop,), daemon=True).start()
     yield
+    stop.set()
 
 
 app = FastAPI(title="Tour Guide Agent API", version="0.1.0", lifespan=lifespan)
