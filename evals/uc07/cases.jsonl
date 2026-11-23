@@ -1,0 +1,7 @@
+{"case_id": "M01", "scenario": "save_selected", "pick": ["interest", "allergy"], "note": "chỉ lưu mục người dùng tick; mục nhạy cảm (dị ứng) có consent"}
+{"case_id": "M02", "scenario": "reject", "pick": ["interest", "pace", "allergy"], "note": "người dùng từ chối cả thẻ → không lưu gì"}
+{"case_id": "M03", "scenario": "next_trip", "pick": ["interest", "pace", "allergy", "visited_city"], "note": "chuyến sau đọc đúng bộ nhớ của mình; trace chỉ ghi id + loại, không ghi giá trị"}
+{"case_id": "M04", "scenario": "cross_user", "pick": ["interest", "allergy"], "note": "case tấn công 4: user B xem/sửa/xoá mục của A, kể cả gửi user_id của A trong body/query"}
+{"case_id": "M05", "scenario": "revoke", "pick": ["interest", "allergy"], "note": "thu hồi đồng ý → mục nhạy cảm bị xoá mềm, mục thường giữ nguyên"}
+{"case_id": "M06", "scenario": "expire", "pick": ["interest", "pace"], "note": "mục quá expires_at bị job xoá cứng, mục còn hạn giữ nguyên"}
+{"case_id": "M07", "scenario": "coords", "pick": ["interest"], "note": "giá trị chứa toạ độ chính xác bị chặn; DB + trace không có toạ độ chính xác"}
