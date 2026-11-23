@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type ApiError, type TripProfile, type TripRow } from "../api";
 import type { Shell } from "../App";
+import { NearestPlace } from "../components/NearestPlace";
 import { getLang, poiName, t } from "../i18n";
-import { distanceM, nearestPoi, useSessionLocation } from "../location";
+import { inHue, nearestPoi, useSessionLocation } from "../location";
+import MapView from "../MapView";
 import { Empty, go, interest, Skeleton, vnd } from "../ui";
 
 const STATUS: Record<string, [string, string]> = {
@@ -77,7 +79,9 @@ export function PlanPage({ shell, preset }: { shell: Shell; preset: string }) {
     }
   }
   const here = useSessionLocation();
-  const origin = nearestPoi(here.coords, shell.pois);
+  const nearest = nearestPoi(here.coords, shell.pois);
+  // Ở ngoài Huế thì điểm gần nhất vẫn hiện để tham khảo nhưng không gửi agent làm điểm xuất phát
+  const origin = here.coords && inHue(here.coords) ? nearest : null;
   const submitForm = (e: FormEvent) => { e.preventDefault(); start("/ui/start-form", toProfile(form, origin)); };
   const submitText = (e: FormEvent) => { e.preventDefault(); start("/ui/start-text", { text }); };
   const length = dayCount(form.start_date, form.end_date);
@@ -141,17 +145,21 @@ export function PlanPage({ shell, preset }: { shell: Shell; preset: string }) {
           </label>
           <div className="wide here-bar">
             <span>{t("Điểm xuất phát", "Starting point")}</span>
-            {here.coords && origin ? (
-              <>
-                <span className="small">{t("Gần", "Near")} <b>{poiName(origin)}</b> ({(distanceM(here.coords, origin) / 1000).toFixed(1)} km)</span>
-                <button type="button" className="ghost" onClick={here.clear}>{t("Bỏ vị trí", "Remove location")}</button>
-              </>
-            ) : (
+            {!(here.coords && nearest) && (
               <button type="button" onClick={here.request} disabled={here.asking}>{here.asking ? t("Đang lấy vị trí...", "Getting location...") : t("Lấy vị trí hiện tại", "Use my current location")}</button>
             )}
             <small className="muted">{t("Agent chỉ nhận tên địa điểm gần bạn nhất, toạ độ ở lại trên máy này.", "The agent only gets the name of the nearest place; your coordinates stay on this device.")}</small>
             {here.error && <p className="warn small" role="alert">{here.error}</p>}
           </div>
+          {here.coords && nearest && (
+            <div className="wide here-panel">
+              <NearestPlace poi={nearest} here={here.coords} title={t("Điểm gần bạn nhất", "Closest place to you")} onClear={here.clear}
+                extra={<p className="small">{origin
+                  ? t("Agent sẽ ưu tiên các điểm gần đây vào đầu mỗi ngày.", "The agent will favour nearby places at the start of each day.")
+                  : t("Không dùng làm điểm xuất phát vì bạn đang ở ngoài Huế.", "Not used as the starting point because you are outside Hue.")}</p>} />
+              <MapView slots={[]} pois={shell.pois} here={here.coords} nearest={{ lat: nearest.lat, lon: nearest.lon, name: poiName(nearest) }} />
+            </div>
+          )}
           <button type="submit" className="wide primary">{busy ? t("Đang gửi...", "Sending...") : t("Lập lịch trình", "Plan itinerary")}</button>
         </fieldset>
       </form>

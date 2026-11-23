@@ -58,6 +58,17 @@ button.link { padding: 0; border: 0; background: none; color: var(--brand-dark);
 .revise { margin-top: 24px; }
 .here-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
 .here-bar .warn, .here-bar small { width: 100%; margin: 0; }
+/* Thẻ điểm gần nhất + bản đồ vị trí (W10-P4-6) */
+.nearest { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 14px; padding: 12px; margin-bottom: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+.nearest-photo { height: 112px; border-radius: 12px; overflow: hidden; background: var(--soft); }
+.nearest-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nearest-body p { margin: 0 0 4px; }
+.nearest-name { font-weight: 700; }
+.nearest-body button { margin-top: 4px; padding: 6px 12px; font-size: .88rem; }
+.here-panel .map { height: 340px; }
+.nearest + .map { height: calc(100vh - 330px); }
+.dist-label { background: #2563eb; color: #fff; border: 0; border-radius: 999px; padding: 2px 8px; font-weight: 700; box-shadow: 0 1px 4px rgb(21 35 59 / .35); }
+.dist-label::before { display: none; }
 .event-log { margin-top: 8px; }
 .event-log .timeline { max-height: 320px; overflow-y: auto; }
 .nav-bottom { display: none; }
@@ -263,7 +274,9 @@ blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 3px solid var(--l
   .plan-grid, .poi-grid, .journal { grid-template-columns: minmax(0, 1fr); }
   .map-stick, .facts { position: static; }
   .map-stick { order: -1; }
-  .map { height: 300px; }
+  .map, .nearest + .map, .here-panel .map { height: 300px; }
+  .nearest { grid-template-columns: 84px minmax(0, 1fr); }
+  .nearest-photo { height: 84px; }
   .review { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 720px) {
