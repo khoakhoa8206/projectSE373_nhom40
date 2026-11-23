@@ -383,18 +383,21 @@ RESULTS = Path(__file__).resolve().parents[3] / "results"
 
 def summarize_cases(rows):
     """Tổng hợp cases.jsonl của 1 UC: pass rate, token/độ trễ trung bình, tổng chi phí, trung bình từng metric số."""
-    n = len(rows)
-    avg = lambda vals: sum(vals) / len(vals) if vals else None  # noqa: E731
-    keys = {k for r in rows for k, v in r.get("metrics", {}).items() if isinstance(v, int | float)}
+
+    def avg(vals):  # bỏ None / chuỗi; bool tính 0/1
+        vals = [v for v in vals if isinstance(v, int | float)]
+        return sum(vals) / len(vals) if vals else None
+
+    metrics = [r.get("metrics", {}) for r in rows]
+    keys = sorted({k for m in metrics for k, v in m.items() if isinstance(v, int | float)})
     return {
-        "cases": n,
+        "cases": len(rows),
         "passed": sum(r["passed"] for r in rows),
-        "pass_rate": sum(r["passed"] for r in rows) / n if n else None,
-        "tokens": avg([r["tokens"] for r in rows if r.get("tokens") is not None]),
+        "pass_rate": avg([r["passed"] for r in rows]),
+        "tokens": avg([r.get("tokens") for r in rows]),
         "cost_usd": sum(r.get("cost") or 0 for r in rows),
-        "latency_ms": avg([r["latency_ms"] for r in rows if r.get("latency_ms") is not None]),
-        "metrics": {k: avg([r["metrics"][k] for r in rows if isinstance(r.get("metrics", {}).get(k), int | float)])
-                    for k in sorted(keys)},  # fmt: skip
+        "latency_ms": avg([r.get("latency_ms") for r in rows]),
+        "metrics": {k: avg([m.get(k) for m in metrics]) for k in keys},
     }
 
 

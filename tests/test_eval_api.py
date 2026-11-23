@@ -13,8 +13,9 @@ def test_eval_results_groups_by_run_and_uc(tmp_path, monkeypatch):
         {"case_id": "B", "passed": False, "tokens": 300, "cost": 0.03, "latency_ms": 3000, "metrics": {"recall_at_5": 0.5, "ok": False}},
         {"case_id": "C", "passed": False, "reasons": ["runner: lỗi"]},  # case lỗi runner: không có token/metrics
     ]  # fmt: skip
-    (tmp_path / "run1" / "uc03").mkdir(parents=True)
-    (tmp_path / "run1" / "uc03" / "cases.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    uc = tmp_path / "run1" / "uc03"
+    uc.mkdir(parents=True)
+    (uc / "cases.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     (tmp_path / "uc02-20261028-220526").mkdir()  # run không tên: không hiện trên dashboard
     monkeypatch.setattr(server, "RESULTS", tmp_path)
 
