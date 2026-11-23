@@ -6,6 +6,7 @@ import Home from "./pages/Home";
 import PoiPage from "./pages/Poi";
 import { PlanPage, TripsPage } from "./pages/Plan";
 import ProfilePage from "./pages/Profile";
+import TracePage from "./pages/Trace";
 import TripPage from "./pages/Trip";
 import { CreditsPage, MemoryPage, NarratePage, VerifyPage } from "./pages/Tools";
 import { Empty } from "./ui";
@@ -74,6 +75,7 @@ export default function App() {
   else if (parts[0] === "narrate") page = <NarratePage shell={shell} preset={new URLSearchParams(query).get("poi")} />;
   else if (parts[0] === "memory") page = <MemoryPage shell={shell} />;
   else if (parts[0] === "verify") page = <VerifyPage shell={shell} />;
+  else if (parts[0] === "trace") page = <TracePage shell={shell} runId={parts[1] ?? null} query={new URLSearchParams(query).get("q") ?? ""} />;
   else if (parts[0] === "credits") page = <CreditsPage pois={pois} />;
   else page = <Home shell={shell} />;
 
@@ -113,7 +115,7 @@ export default function App() {
             {t("Bản đồ", "Map")} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>.{" "}
             {t("Dữ liệu địa điểm OSM và Wikivoyage (CC BY-SA 4.0). Thời tiết: dự báo mock của nhóm; khi bật nguồn thứ hai:", "Place data from OSM and Wikivoyage (CC BY-SA 4.0). Weather: the team's mock forecast; when the second source is on:")}{" "}
             <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather data by Open-Meteo.com</a> (CC BY 4.0).{" "}
-            <a href="#/credits">{t("Nguồn ảnh và giấy phép", "Photo credits and licences")}</a>
+            <a href="#/credits">{t("Nguồn ảnh và giấy phép", "Photo credits and licences")}</a>{user && <> · <a href="#/trace">{t("Trace các lượt chạy", "Run traces")}</a></>}
           </p>
         </div>
       </footer>
