@@ -1,10 +1,95 @@
 """UC-06: reviewer chỉ đọc (permissions.yaml), ReviewReport, slot_ref phải có thật, vòng planner ↔ reviewer."""
 
+import json
+from types import SimpleNamespace as NS
+
+from openai.types.chat import ChatCompletion
 from pydantic import BaseModel
 
 from agent.db import repo
+from agent.schemas import Itinerary
+from agent.src.graph import app
 from agent.src.graph.loop import SUBMIT, agent_loop, permitted
-from tests.test_uc02 import FakeLLM, call
+from agent.src.nodes.review import ROLES, review
+from tests.test_uc02 import TOOLS, FakeLLM, call, graph_source_facts, new_trip  # noqa: F401 (fixture autouse)
+
+APPROVE = {"verdict": "approve", "findings": []}
+
+
+class ReviewerLLM:
+    """LLM giả cho 3 reviewer chạy song song: nhận ra vai qua system prompt, nộp ngay report[vai]({slot_ids})."""
+
+    def __init__(self, reports):
+        self.reports, self.calls = reports, []
+        self.chat = NS(completions=NS(create=self.create))
+
+    def create(self, **kw):
+        name = next(n for n, role in ROLES.items() if role in kw["messages"][0]["content"])
+        self.calls.append(name)
+        slot_ids = [s["slot_id"] for s in json.loads(kw["messages"][1]["content"])["slots"]]
+        report = self.reports.get(name, APPROVE)
+        message = {"content": None, "tool_calls": [call("s", SUBMIT, report(slot_ids) if callable(report) else report)]}
+        return ChatCompletion.model_validate({
+            "id": "x", "object": "chat.completion", "created": 0, "model": "fake-reviewer",
+            "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {"role": "assistant", **message}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "cost": 0},
+        })  # fmt: skip
+
+
+def validated_state():
+    """Lịch trình UC-02 thật (LLM giả) đã lưu DB, làm đầu vào cho review."""
+    trip_id = new_trip()
+    res = app.run_uc02(trip_id, "u-ha", client=FakeLLM(), tools=TOOLS)
+    row = repo.itinerary_for_trip(trip_id)
+    _, profile = repo.latest_profile(trip_id)
+    return {"run_id": res["run_id"], "trip_id": trip_id, "itinerary": Itinerary.model_validate(row), "profile": profile}
+
+
+def safety_rejects(slot_ids):
+    return {"verdict": "request_changes", "findings": [
+        {"slot_ref": slot_ids[0], "severity": "high", "rule": "restricted_area", "message": "trong khu cấm"},
+        {"slot_ref": "it-bia:d9-s9", "severity": "high", "rule": "child_safety", "message": "slot bịa"},
+        {"slot_ref": None, "severity": "low", "rule": "note", "message": "ghi chú cả chuyến"},
+    ]}  # fmt: skip
+
+
+def test_review_round_saves_three_reports_and_drops_fake_slot_ref(db):
+    state = validated_state()
+    usage = {"in": 0, "out": 0, "cost": 0.0}
+    out = review(state, ReviewerLLM({"safety": safety_rejects}), TOOLS, usage)
+
+    it_id = state["itinerary"].itinerary_id
+    reports = repo.reviews_for_itinerary(it_id)
+    assert sorted(r["reviewer"] for r in reports) == ["budget", "local_expert", "safety"]
+    safety = next(r for r in reports if r["reviewer"] == "safety")
+    assert safety["verdict"] == "request_changes" and len(safety["findings"]) == 2  # slot bịa bị bỏ
+    assert {f["slot_ref"] for f in safety["findings"]} == {state["itinerary"].slots[0].slot_id, None}
+    # chỉ finding medium/high về planner; còn vòng 2 nên chưa chốt reviewed
+    assert [f["rule"] for f in out["review_findings"]] == ["restricted_area"] and out["review_again"]
+    assert out["itinerary"].status == "validated" and usage["in"] == 30
+
+    trace = repo.query("SELECT node, kind, name FROM trace_events WHERE run_id = ? AND node LIKE 'reviewer.%'",
+                       (state["run_id"],))  # fmt: skip
+    assert {"node": "reviewer.safety", "kind": "guardrail", "name": "unknown_slot_ref"} in trace
+    for name in ROLES:  # coordination trace: orchestrator → reviewer → orchestrator
+        kinds = [e["kind"] for e in trace if e["node"] == f"reviewer.{name}"]
+        assert kinds[0] == "node_start" and "node_end" in kinds
+
+
+def test_last_round_marks_reviewed_and_reviewer_error_does_not_block(db):
+    state = validated_state() | {"review_round": 1}
+
+    def broken(_slot_ids):
+        return {"verdict": "không hợp lệ"}  # LLM nộp sai schema mãi → hết lượt → lỗi reviewer
+
+    out = review(state, ReviewerLLM({"budget": broken, "safety": safety_rejects}), TOOLS, {"in": 0, "out": 0, "cost": 0.0})
+    assert out["review_round"] == 2 and not out["review_again"]
+    row = repo.query("SELECT status, review_rounds FROM itineraries WHERE itinerary_id = ?",
+                     (state["itinerary"].itinerary_id,))[0]  # fmt: skip
+    assert row == {"status": "reviewed", "review_rounds": 2}
+    assert sorted(r["reviewer"] for r in repo.reviews_for_itinerary(state["itinerary"].itinerary_id)) == ["local_expert", "safety"]
+    errors = repo.query("SELECT node FROM trace_events WHERE run_id = ? AND kind = 'error'", (state["run_id"],))
+    assert errors == [{"node": "reviewer.budget"}]
 
 
 def get_poi(poi_id: str) -> dict:
