@@ -1,0 +1,6 @@
+# Quyền tool của từng agent (UC-06). Harness chỉ đưa cho agent các tool có tên ở đây;
+# LLM gọi tool khác (vd get_weather_forecast có ghi DB) → bị chặn, ghi trace guardrail 'tool_denied'.
+# Reviewer chỉ có tool ĐỌC: không ghi được bảng nghiệp vụ nào.
+reviewer.local_expert: [get_poi, get_opening_hours, get_travel_time]
+reviewer.budget: [get_poi]
+reviewer.safety: [get_poi, check_restricted_area, get_travel_time]

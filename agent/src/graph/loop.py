@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, get_type_hints
 
+import yaml
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError, create_model
 from pydantic_core import to_jsonable_python
@@ -23,6 +24,7 @@ DEFAULT_MODELS = (
 )
 SUBMIT = "submit_result"  # tool ảo: LLM gọi để nộp kết quả cuối, chạy được với mọi model có tool calling
 SKILLS_DIR = Path(__file__).resolve().parents[3] / "skills"
+PERMISSIONS = Path(__file__).resolve().parents[3] / "config" / "permissions.yaml"
 
 
 class AgentLoopLimitError(RuntimeError):
@@ -53,6 +55,12 @@ def load_skill(name, run_id, node):
     text = (SKILLS_DIR / name / "SKILL.md").read_text(encoding="utf-8")
     repo.log_event(run_id, node, "skill_use", name=name)
     return text
+
+
+def permitted(agent, tools):
+    """Tool mà `agent` được dùng theo config/permissions.yaml. Agent không có trong file → không có tool nào."""
+    allowed = set(yaml.safe_load(PERMISSIONS.read_text(encoding="utf-8")).get(agent) or [])
+    return [t for t in tools if t.__name__ in allowed]
 
 
 def json_schema(model: type[BaseModel]):
@@ -106,7 +114,10 @@ def _handle_call(call, by_name, output, run_id, node):
     except (json.JSONDecodeError, ValidationError) as e:
         return None, json.dumps({"error": f"Tham số không hợp lệ, sửa và gọi lại: {e}"}, ensure_ascii=False)
     fn = by_name.get(call.function.name)
-    result, error = run_tool(fn, args, run_id, node) if fn else (None, f"không có tool {call.function.name}")
+    if fn is None:  # tool không được cấp cho node này (permissions.yaml) hoặc không tồn tại: không chạy
+        repo.log_event(run_id, node, "guardrail", name="tool_denied", args={"tool": call.function.name, "args": args})
+        return None, json.dumps({"error": f"không có quyền dùng tool {call.function.name}"}, ensure_ascii=False)
+    result, error = run_tool(fn, args, run_id, node)
     return None, json.dumps({"error": error} if error else result, ensure_ascii=False)
 
 
