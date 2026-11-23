@@ -9,6 +9,7 @@ import secrets
 import sqlite3
 import threading
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Literal
 
 from dotenv import load_dotenv
@@ -375,6 +376,36 @@ def list_pois(destination_id: str = "hue", category: str | None = None):
         (destination_id, category, category),
     )
     return [r | {"tags": _parse(r["tags"])} for r in rows]
+
+
+RESULTS = Path(__file__).resolve().parents[3] / "results"
+
+
+def summarize_cases(rows):
+    """Tổng hợp cases.jsonl của 1 UC: pass rate, token/độ trễ trung bình, tổng chi phí, trung bình từng metric số."""
+    n = len(rows)
+    avg = lambda vals: sum(vals) / len(vals) if vals else None  # noqa: E731
+    keys = {k for r in rows for k, v in r.get("metrics", {}).items() if isinstance(v, int | float)}
+    return {
+        "cases": n,
+        "passed": sum(r["passed"] for r in rows),
+        "pass_rate": sum(r["passed"] for r in rows) / n if n else None,
+        "tokens": avg([r["tokens"] for r in rows if r.get("tokens") is not None]),
+        "cost_usd": sum(r.get("cost") or 0 for r in rows),
+        "latency_ms": avg([r["latency_ms"] for r in rows if r.get("latency_ms") is not None]),
+        "metrics": {k: avg([r["metrics"][k] for r in rows if isinstance(r.get("metrics", {}).get(k), int | float)])
+                    for k in sorted(keys)},  # fmt: skip
+    }
+
+
+@app.get("/api/evals")
+def eval_results():
+    """Kết quả eval đã commit cho trang Eval: {run1: {uc02: {...}, uc11: {...}}, run2: {...}} (từ evals.run --name)."""
+    out = {}
+    for f in sorted(RESULTS.glob("run*/*/cases.jsonl")):
+        rows = [json.loads(line) for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
+        out.setdefault(f.parent.parent.name, {})[f.parent.name] = summarize_cases(rows)
+    return out
 
 
 @app.post("/api/narrate")
