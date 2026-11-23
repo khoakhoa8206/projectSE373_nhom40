@@ -175,7 +175,7 @@ def test_ui_review_shows_both_rounds_and_coordination(db, monkeypatch):
     from fullstack.api import _review
 
     answers = iter([safety_rejects, lambda _ids: APPROVE])
-    res, its, _ = run_reviewed({"safety": lambda ids: next(answers)(ids)})
+    res, _, _ = run_reviewed({"safety": lambda ids: next(answers)(ids)})
     trip_id = repo.query("SELECT trip_id FROM runs WHERE run_id = ?", (res["run_id"],))[0]["trip_id"]
     out = _review(repo.itinerary_for_trip(trip_id))
 
