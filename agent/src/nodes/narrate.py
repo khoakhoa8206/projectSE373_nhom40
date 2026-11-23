@@ -3,7 +3,8 @@ Graph: retrieve → (không có đoạn đủ điểm → finalize ngoài kho) �
 - retrieve: tool retrieve_knowledge (có poi_id thì lọc tài liệu của POI trước), giữ đoạn có score ≥ KB_MIN_SCORE.
 - generate: agent_loop không có tool, LLM nộp các ý {text, passage, quote}; đoạn kho được bọc như DỮ LIỆU.
 - check_citations: validator trích dẫn (W9-P3-2), sai thì cho LLM sửa 1 lần, vẫn sai thì bỏ ý.
-- finalize: code ghép “ý [doc_id §section]”, ghi messages + citations; không còn ý nào → đúng câu ngoài kho."""
+- finalize: code ghép “ý [doc_id §section]”, UC-11 kiểm dữ kiện (giờ, giá, ngày lễ hội) và sửa theo nguồn, rồi ghi
+  messages + citations; không còn ý nào → đúng câu ngoài kho."""
 
 import os
 import time
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 from agent.db import repo
 from agent.src.graph.app import traced
 from agent.src.graph.loop import agent_loop, load_skill, make_client, ms, run_tool
+from agent.src.nodes.verify import present_text
 from agent.src.rag.retriever import retrieve_knowledge
 from agent.src.validation.citations import enforce_citations, save_citations
 
@@ -168,10 +170,15 @@ def compose(points, lang) -> tuple[str, list[dict]]:
 def finalize(state):
     lang = state["lang"]
     text, citations = (OUT_OF_KB[lang], []) if state.get("out_of_kb") else compose(state["points"], lang)
+    blocked = False
+    if not state.get("out_of_kb"):  # UC-11 (W10-P4-1): kiểm giờ/giá/ngày trong câu trả lời trước khi lưu và trả API
+        checked = present_text(text, state["run_id"], f"{state['run_id']}:answer", lang)
+        text, blocked = checked["text"], checked["blocked"]
+        citations = [] if blocked else citations
     asked = state.get("question") or f"[Đang ở đây] {poi_name(state['poi_id'], lang)} ({state['poi_id']})"
     repo.add_message(state["trip_id"], state["user_id"], "user", asked, lang, state["run_id"])
     message_id = repo.add_message(state["trip_id"], state["user_id"], "assistant", text, lang, state["run_id"])
-    if not state.get("out_of_kb"):
+    if not state.get("out_of_kb") and not blocked:
         save_citations(message_id, state.get("checked", []))
     return {"text": text, "citations": citations, "message_id": message_id}
 

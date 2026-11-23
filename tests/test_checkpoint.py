@@ -40,7 +40,8 @@ def test_crash_after_plan_continues_at_validate(db, monkeypatch):
     assert fresh.calls == 0  # không chạy lại plan
     nodes = [r["node"] for r in repo.query(
         "SELECT node FROM trace_events WHERE run_id = ? AND kind = 'node_start' ORDER BY seq", (res["run_id"],))]
-    assert nodes == ["load_profile", "plan", "validate", "validate", "finalize"]  # validate lần 2 là lần chạy tiếp
+    # validate lần 2 là lần chạy tiếp; verify (UC-11) chạy sau finalize
+    assert nodes == ["load_profile", "plan", "validate", "validate", "finalize", "verify"]
     assert app.continue_run(trip_id, client=fresh, tools=TOOLS) is None  # đã tới END, không còn gì để chạy
 
 

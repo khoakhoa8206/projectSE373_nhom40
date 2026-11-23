@@ -34,8 +34,10 @@
 | `wrong_distance` | 2 | |
 | `wrong_weather`, `entity_not_found` | 2 | |
 
-**Còn thiếu:** 3 câu riêng cho RAG (`docs/uc-11.md` mục 12.2) và ngày lễ hội "đúng" để kỳ vọng `contradicted`: cần
-`retrieve_knowledge` của P3 + tài liệu lễ hội có nguồn.
+**Còn thiếu:** 3 câu riêng cho RAG (`docs/uc-11.md` mục 12.2) và ngày lễ hội "đúng" để kỳ vọng `contradicted`. Từ W10-P4-4
+verifier đã lấy bằng chứng lễ hội qua `retrieve_knowledge` (test bằng retriever giả: `tests/test_uc11_festival.py`), nhưng
+kho `kb/docs` (22/11/2026) **chưa có tài liệu nào ghi ngày lễ hội**, và DB của runner không nạp kho tri thức. Khi P3 thêm tài
+liệu lễ hội có nguồn thì thêm câu vào đây và cho runner nạp kho (`python -m agent.src.rag.ingest`).
 
 ## Chạy
 
