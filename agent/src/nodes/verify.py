@@ -9,8 +9,10 @@ LLM tách, code phán xử:
   sửa, còn claim sai thì trả SAFE_FALLBACK).
 - present_itinerary / present_text (W10-P4-1): node verify đứng trước API/PWA. Lịch trình UC-02 được sửa bằng code và
   ghi lại DB trước bước duyệt; câu thuyết minh UC-03 đi qua verify_and_fix trước khi lưu tin nhắn.
-Chưa có ở v0 (W10): bằng chứng RAG cho festival_date (chờ retrieve_knowledge của P3) nên claim lễ hội luôn unverified."""
+- festival_date (W10-P4-4): bằng chứng lấy từ kho tri thức qua retrieve_knowledge (P3), chỉ đọc câu có nhắc đúng tên lễ hội;
+  kho không có ngày nào thì unverified, không đoán."""
 
+import calendar
 import os
 import re
 import unicodedata
@@ -23,6 +25,7 @@ from pydantic import BaseModel
 from agent.db import repo
 from agent.schemas import Claim, Itinerary
 from agent.src.graph.loop import agent_loop, make_client, run_tool
+from agent.src.rag.retriever import retrieve_knowledge
 from agent.src.tools.destination import get_opening_hours, get_poi, get_travel_time
 from agent.src.tools.opening_hours import minutes
 from agent.src.tools.weather import get_weather_forecast
@@ -67,6 +70,7 @@ class DraftClaim(BaseModel):
     mode: str = "drive"
     context_date: str | None = None
     issue: str | None = None  # entity_not_found / unsupported_format / orphan: unverified, không cần tra nguồn
+    context: str | None = None  # câu chứa claim: festival_date dùng làm câu hỏi RAG và để lấy tên lễ hội
 
 
 class Evidence(BaseModel):
@@ -167,6 +171,8 @@ def _match(attribute, claim, evidence):
         return abs(claim - evidence) <= 0.2 * evidence
     if attribute == "start_date" and len(claim) == 7:  # claim chỉ ghi tháng/năm
         return evidence.startswith(claim)
+    if attribute == "start_date" and len(evidence) == 7:  # nguồn chỉ ghi tháng/năm: claim cùng tháng là khớp
+        return claim.startswith(evidence)
     return claim == evidence
 
 
@@ -336,10 +342,10 @@ def extract_regex(text: str, ctx: dict, run_id: str | None = None) -> list[Draft
         for m in re.finditer(rf"(?<![\d.,]){NUM}\s?mm(?![a-z])", fs):
             add("weather", "precip_mm", m.start(), m.end(), "mm", **wkw)
 
-        # Ngày lễ hội: chỉ trong câu có nói tới lễ hội. Chưa có nguồn (RAG của P3) nên luôn unverified, không đoán.
+        # Ngày lễ hội: chỉ trong câu có nói tới lễ hội; bằng chứng lấy từ kho tri thức (B5), không có thì unverified.
         if re.search(KW_FESTIVAL, fs):
             for m in re.finditer(FEST_DATE, fs):
-                add("festival_date", "start_date", m.start(), m.end(), "date")
+                add("festival_date", "start_date", m.start(), m.end(), "date", context=s.strip())
 
         # Khoảng cách, thời gian di chuyển: cần đủ 2 POI trong câu (đi từ POI đầu tới POI sau)
         mode = "walk" if re.search(r"\b(?:di bo|walk|walking)\b", fs) else "bike" if re.search(
@@ -442,6 +448,8 @@ def extract_llm(text: str, ctx: dict, run_id: str) -> list[DraftClaim]:
         if (ctype in ("opening_hours", "price") and not poi) or (ctype == "distance" and not (poi and to_poi)):
             kw["issue"] = "entity_not_found"
         si = next((i for i, m in enumerate(sentences) if m.start() <= a < m.end()), 0)
+        if ctype == "festival_date" and sentences:
+            kw["context"] = sentences[si][0].strip()
         claims.append(DraftClaim(claim_type=ctype, claim_text=text[a:b], start=a, sentence=si, attribute=x.attribute,
                                  value_raw=x.value, value_norm=value, **kw))  # fmt: skip
     # Lưới regex (B2): con số LLM bỏ sót vẫn thành claim
@@ -494,7 +502,49 @@ def _evidence(claim: DraftClaim, ctx, run_id) -> list[Evidence]:
             return []
         return [Evidence(value_norm=res[key], kind="tool", ref=f"{claim.poi_id}→{claim.to_poi_id}:{claim.mode}",
                          source_url=res["source_url"], verified_at=res["verified_at"])]  # fmt: skip
-    return []  # festival_date: chờ retrieve_knowledge của P3 (W10)
+    if claim.claim_type == "festival_date":
+        return _festival_evidence(claim, run_id)
+    return []
+
+
+retrieve = retrieve_knowledge  # test tiêm retriever giả: monkeypatch verify.retrieve
+# Chữ không thuộc tên lễ hội ("Festival Huế 2026 khai mạc…" → tên là "festival hue")
+FEST_STOP = (r"(?:nam|ngay|khai|mac|dien ra|to chuc|bat dau|keo dai|vao|tu|la|se|duoc|thang|mua|will|is|was|on|in|from"
+             r"|starts?|opens?|runs?|takes?|begins?|held|of|the)")  # fmt: skip
+
+
+def festival_name(sentence: str) -> str:
+    """Tên lễ hội trong câu (đã bỏ dấu): từ khoá + tối đa 3 chữ theo sau, dừng ở số hoặc chữ chức năng; tiếng Anh thêm
+    1 chữ đứng trước ("Hue Festival"). Vd 'Festival Huế 2026 khai mạc…' → 'festival hue'."""
+    m = re.search(rf"(?:\b((?!{FEST_STOP}\b)[a-z]+)\s+)?\b(le hoi|festival|ngay hoi|carnival)"
+                  rf"((?:\s+(?!{FEST_STOP}\b)[a-z]+){{0,3}})", fold(sentence))  # fmt: skip
+    if not m:
+        return ""
+    before = f"{m[1]} " if m[1] and m[2] in ("festival", "carnival") and not m[3] else ""  # "Festival Huế" đã có tên sau
+    return f"{before}{m[2]}{m[3]}"
+
+
+def _festival_evidence(claim: DraftClaim, run_id) -> list[Evidence]:
+    """R1–R5 (docs/uc-11.md mục 5): hỏi kho tri thức bằng câu chứa claim, chỉ đọc ngày trong câu có từ khoá lễ hội và
+    có đúng tên lễ hội (tránh lấy ngày của sự kiện khác cùng đoạn); review hư cấu là ý kiến nên bỏ. Mỗi câu chỉ lấy ngày
+    đầu tiên = ngày bắt đầu ("từ 6/6 đến 11/6/2026" → 6/6/2026, năm lấy theo năm ghi trong câu); câu không ghi năm thì bỏ."""
+    query = claim.context or claim.claim_text
+    res, err = run_tool(retrieve, {"query": query, "poi_id": claim.poi_id, "k": 5}, run_id, NODE)
+    if err:
+        return []
+    name, out = festival_name(query), []
+    for r in res["results"]:
+        if r["is_fictional"]:
+            continue
+        for sm in _sentences(r["text"]):
+            fs = fold(sm[0])
+            if not re.search(KW_FESTIVAL, fs) or (name and name not in fs) or not (m := re.search(FEST_DATE, fs)):
+                continue
+            year = re.search(r"\b(?:19|20)\d{2}\b", fs)
+            if value := normalize(sm[0][m.start():m.end()], "date", int(year[0]) if year else None):
+                out.append(Evidence(value_norm=value, kind="kb", ref=r["chunk_id"], source_url=r["source_url"],
+                                    quote=sm[0].strip()))  # fmt: skip
+    return out
 
 
 # ---------------------------------------------------------------- B7: sửa bằng code, gắn nhãn "chưa xác minh"
@@ -514,6 +564,11 @@ def fmt(attribute, value, lang="vi"):
         return text.replace(".", ",") if vi else text  # tiếng Việt viết thập phân bằng dấu phẩy
     if attribute == "travel_minutes":
         return f"{value} phút" if vi else f"{value} min"
+    if attribute == "start_date":  # 'YYYY-MM-DD' hoặc 'YYYY-MM'
+        y, mo, *d = value.split("-")
+        if vi:
+            return f"{int(d[0])}/{int(mo)}/{y}" if d else f"tháng {int(mo)}/{y}"
+        return f"{calendar.month_name[int(mo)]} {int(d[0])}, {y}" if d else f"{calendar.month_name[int(mo)]} {y}"
     return str(value)
 
 
