@@ -21,7 +21,7 @@ Lập manifest: 09/11/2026.
 | osm_snapshot.json | Trích xuất tuyển chọn từ Overpass/OSM | ODbL-1.0 | 25/10/2026 theo data/README.md | 31 element: 26 POI OSM và 5 vùng | scripts/prepare_hue_data.py, từ dữ liệu Overpass tải trước |
 | travel_matrix.csv | OSRM, routing trên dữ liệu OSM | ODbL-1.0, dữ liệu dẫn xuất OSM | computed_at 2026-10-24T18:54:30+00:00 | 900 cặp có hướng, mode drive | scripts/build_travel_matrix.py |
 | routing_provenance.json | Metadata lần lấy ma trận OSRM | Attribution OSM/OSRM; dữ liệu dẫn xuất OSM theo ODbL-1.0 | computed_at 2026-10-24T18:54:30+00:00 | 1 object; 30 sources, 30 destinations | scripts/build_travel_matrix.py |
-| poi_images.csv | Wikimedia Commons, tác giả và link từng ảnh | CC0, Public domain, CC BY, CC BY-SA theo từng dòng | retrieved_at 2026-11-09 | 25 dòng ảnh POI cho web/public/poi | P4 chọn thủ công, ảnh quán ăn ghi illustrative=1 |
+| poi_images.csv | Wikimedia Commons, tác giả và link từng ảnh | CC0, Public domain, CC BY, CC BY-SA theo từng dòng | retrieved_at 2026-11-09; 2 ảnh thêm 2026-11-22 | 27 dòng: 26 POI + ảnh nền trang chủ, file ở web/public/poi | P4 chọn thủ công; ảnh quán ăn và Làng hương Thủy Xuân (ảnh hương ở Huế, không chụp tại làng) ghi illustrative=1 |
 
 Thời điểm routing trên tương ứng 01:54:30 ngày 25/10/2026 tại Việt Nam.
 Snapshot OSM có `timestamp_osm_base=2026-06-01T08:52:28Z`;
@@ -32,7 +32,7 @@ không coi ngày tải 25/10 là ngày bản đồ được cập nhật.
 | File | SHA256 |
 |---|---|
 | osm_snapshot.json | e2b86d2e4cc6160ac67438affbfd752aacd11ccb53decf87d49318fc6c89fdc4 |
-| poi_images.csv | 9cf24d9b05bad0ae8c47379cd8c23d8fea087467f50cd6a8aa591464f3b1b60e |
+| poi_images.csv | 696c1809e13dba09948cfce831ade363cd69cd5e41c3f77ab661f394a333e736 |
 | poi.csv | 83224641dedf68c78699e24d49a057d1514eb6786c42bb04c987eace1bf05a9b |
 | restricted_zones.geojson | 80f84305249443df8e5c6ff7214a210db87e6360973d1be457b1e64300be5cbe |
 | routing_provenance.json | 0a1b4bb9ff94a4843c0b5fab65ca3368e7b7bf5cfc0d97a3aded108d68d823db |
