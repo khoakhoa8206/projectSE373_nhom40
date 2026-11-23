@@ -2,6 +2,7 @@ import L from "leaflet";
 import { useEffect, useRef } from "react";
 import { api, type Poi, type Slot } from "./api";
 import { getLang, poiName, t } from "./i18n";
+import { distanceM, formatDistance } from "./geo";
 import type { Coords } from "./location";
 
 const HUE: L.LatLngTuple = [16.4637, 107.5909];
@@ -19,8 +20,11 @@ function popup(s: Slot): HTMLElement {
   return div;
 }
 
-/** Bản đồ OSM: mọi POI + marker đánh số theo thứ tự trong ngày + đường nối các điểm (mỗi ngày một màu) + vị trí người dùng nếu có. */
-export default function MapView({ slots, pois, here }: { slots: Slot[]; pois: Poi[]; here?: Coords | null }) {
+/** Bản đồ OSM: mọi POI + marker đánh số theo thứ tự trong ngày + đường nối các điểm (mỗi ngày một màu) + vị trí người dùng
+ * nếu có, nối tới điểm gần nhất (nearest) kèm khoảng cách. */
+export default function MapView({ slots, pois, here, nearest }: {
+  slots: Slot[]; pois: Poi[]; here?: Coords | null; nearest?: { lat: number; lon: number; name: string } | null;
+}) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
@@ -53,16 +57,32 @@ export default function MapView({ slots, pois, here }: { slots: Slot[]; pois: Po
     });
   }, [pois, lang]);
 
-  // Vị trí người dùng chỉ vẽ trên bản đồ ở trình duyệt, không gửi đi đâu
+  // Vị trí người dùng chỉ vẽ trên bản đồ ở trình duyệt, không gửi đi đâu. Có điểm gần nhất thì nối nét đứt + ghi khoảng
+  // cách ở giữa đường, khung nhìn ôm cả hai điểm (ở xa Huế vẫn thấy được mình và điểm đến).
+  const [nLat, nLon, nName] = [nearest?.lat, nearest?.lon, nearest?.name];
   useEffect(() => {
     const group = hereLayer.current!;
     group.clearLayers();
     if (!here) return;
+    map.current!.invalidateSize(); // thẻ điểm gần nhất vừa chèn phía trên làm bản đồ đổi cỡ: Leaflet phải đo lại trước khi canh khung
     const pt: L.LatLngTuple = [here.lat, here.lon];
     if (here.accuracy_m) L.circle(pt, { radius: here.accuracy_m, color: "#2563eb", weight: 1, fillOpacity: 0.1 }).addTo(group);
     L.circleMarker(pt, { radius: 8, color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 }).bindTooltip(t("Bạn ở đây", "You are here")).addTo(group);
-    map.current!.setView(pt, 15);
-  }, [here, lang]);
+    if (nLat == null || nLon == null) {
+      map.current!.setView(pt, 15);
+      return;
+    }
+    const to: L.LatLngTuple = [nLat, nLon];
+    const name = document.createElement("span");
+    name.textContent = `${t("Gần bạn nhất", "Closest to you")}: ${nName ?? ""}`; // tên từ DB, không chèn thành HTML
+    L.polyline([pt, to], { color: "#2563eb", weight: 3, dashArray: "4 8" }).addTo(group);
+    L.circleMarker(to, { radius: 13, color: "#2563eb", weight: 3, fill: false }).bindTooltip(name).addTo(group);
+    const label = document.createElement("span");
+    label.textContent = formatDistance(distanceM(here, { lat: nLat, lon: nLon }), lang);
+    L.tooltip({ permanent: true, direction: "center", className: "dist-label" })
+      .setLatLng([(pt[0] + to[0]) / 2, (pt[1] + to[1]) / 2]).setContent(label).addTo(group);
+    map.current!.fitBounds([pt, to], { padding: [48, 48], maxZoom: 16 });
+  }, [here, nLat, nLon, nName, lang]);
 
   useEffect(() => {
     const group = layer.current!;

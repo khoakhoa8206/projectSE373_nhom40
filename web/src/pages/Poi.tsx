@@ -3,7 +3,7 @@ import { api, type ApiError, type PoiDetail } from "../api";
 import type { Shell } from "../App";
 import MapView from "../MapView";
 import { getLang, poiName, t } from "../i18n";
-import { category, Empty, hoursText, Photo, priceText, Skeleton } from "../ui";
+import { category, Empty, hoursText, Photo, PhotoCredit, priceText, Skeleton } from "../ui";
 
 const NO_SLOTS: never[] = [];
 
@@ -30,12 +30,7 @@ export default function PoiPage({ id, shell }: { id: string; shell: Shell }) {
       <h1>{name}</h1>
       {other && other !== name && <p className="muted">{other}</p>}
       <div className="poi-photo"><Photo poi={poi} eager /></div>
-      {poi.image && (
-        <p className="muted tiny credit">
-          {poi.image.illustrative && t("Ảnh minh hoạ món Huế, không phải ảnh của quán. ", "Illustrative photo of Hue food, not taken at this restaurant. ")}
-          {t("Ảnh", "Photo")}: <a href={poi.image.source_url} target="_blank" rel="noreferrer">{poi.image.author}</a>, {poi.image.license}, Wikimedia Commons
-        </p>
-      )}
+      <PhotoCredit poi={poi} />
       <div className="poi-grid">
         <div>
           <h2>{t("Giới thiệu", "About")}</h2>

@@ -47,23 +47,5 @@ export function useSessionLocation() {
   return { coords, request, error, asking, clear };
 }
 
-/** Khoảng cách đường chim bay (m), công thức haversine. */
-export function distanceM(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
-  const rad = Math.PI / 180;
-  const h =
-    Math.sin(((b.lat - a.lat) * rad) / 2) ** 2 +
-    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(((b.lon - a.lon) * rad) / 2) ** 2;
-  return 2 * 6371000 * Math.asin(Math.sqrt(h));
-}
-
-/** POI gần toạ độ nhất, tính ngay trên trình duyệt. null khi chưa có vị trí hoặc danh sách rỗng. */
-export function nearestPoi<P extends { lat: number; lon: number }>(coords: { lat: number; lon: number } | null, pois: P[]): P | null {
-  if (!coords) return null;
-  let best: P | null = null;
-  let bestM = Infinity;
-  for (const p of pois) {
-    const m = distanceM(coords, p);
-    if (m < bestM) [best, bestM] = [p, m];
-  }
-  return best;
-}
+// Hàm thuần nằm ở geo.ts (test bằng node --test); giữ export ở đây để code cũ không phải đổi import.
+export { distanceM, formatDistance, inHue, nearestPoi } from "./geo";

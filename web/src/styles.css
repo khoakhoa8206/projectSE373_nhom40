@@ -58,6 +58,17 @@ button.link { padding: 0; border: 0; background: none; color: var(--brand-dark);
 .revise { margin-top: 24px; }
 .here-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
 .here-bar .warn, .here-bar small { width: 100%; margin: 0; }
+/* Thẻ điểm gần nhất + bản đồ vị trí (W10-P4-6) */
+.nearest { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 14px; padding: 12px; margin-bottom: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+.nearest-photo { height: 112px; border-radius: 12px; overflow: hidden; background: var(--soft); }
+.nearest-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nearest-body p { margin: 0 0 4px; }
+.nearest-name { font-weight: 700; }
+.nearest-body button { margin-top: 4px; padding: 6px 12px; font-size: .88rem; }
+.here-panel .map { height: 340px; }
+.nearest + .map { height: calc(100vh - 330px); }
+.dist-label { background: #2563eb; color: #fff; border: 0; border-radius: 999px; padding: 2px 8px; font-weight: 700; box-shadow: 0 1px 4px rgb(21 35 59 / .35); }
+.dist-label::before { display: none; }
 .event-log { margin-top: 8px; }
 .event-log .timeline { max-height: 320px; overflow-y: auto; }
 .nav-bottom { display: none; }
@@ -145,6 +156,9 @@ button.link { padding: 0; border: 0; background: none; color: var(--brand-dark);
 .poi-photo { aspect-ratio: 21 / 9; border-radius: 16px; overflow: hidden; background: var(--soft); margin-top: 12px; }
 .poi-photo img { width: 100%; height: 100%; object-fit: cover; }
 .credit { margin-top: 6px; }
+.narrate-photo { margin: 4px 0 8px; }
+.narrate-photo img, .narrate-photo .no-photo { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; display: block; }
+.narrate-photo figcaption .credit { margin: 4px 0 0; }
 .poi-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 36px; margin-top: 22px; align-items: start; }
 .poi-grid h2 { margin-top: 26px; }
 .poi-grid > div > h2:first-child { margin-top: 0; }
@@ -179,6 +193,11 @@ button.link { padding: 0; border: 0; background: none; color: var(--brand-dark);
 .tag.warn { background: #fef3c7; color: var(--warn); }
 .tag.ok { background: #dcfce7; color: var(--ok-text); font-weight: 500; }
 .tag.fixed { background: #dbeafe; color: var(--fixed); }
+/* ClaimBadge (W10-P4-3): nhãn là nút, bấm mở ô nguồn ngay dưới nhãn */
+.claim { position: relative; display: inline-block; }
+.claim > button.tag { border: 0; padding: 2px 10px; font: inherit; font-size: .8rem; line-height: 1.55; }
+.claim > button.tag:hover { transform: none; filter: brightness(.96); }
+.claim-pop { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; display: grid; gap: 2px; width: max-content; max-width: min(320px, calc(100vw - 32px)); padding: 8px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); font-size: .82rem; color: var(--ink); }
 .tags, .profile { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .empty { text-align: center; padding: 40px 16px; background: var(--soft); border-radius: 16px; margin: 16px 0; }
 
@@ -258,7 +277,9 @@ blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 3px solid var(--l
   .plan-grid, .poi-grid, .journal { grid-template-columns: minmax(0, 1fr); }
   .map-stick, .facts { position: static; }
   .map-stick { order: -1; }
-  .map { height: 300px; }
+  .map, .nearest + .map, .here-panel .map { height: 300px; }
+  .nearest { grid-template-columns: 84px minmax(0, 1fr); }
+  .nearest-photo { height: 84px; }
   .review { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 720px) {

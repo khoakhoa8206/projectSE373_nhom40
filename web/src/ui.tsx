@@ -1,6 +1,8 @@
-import { useRef, type ReactNode } from "react";
-import type { Claim, Poi } from "./api";
+import { useRef, useState, type ReactNode } from "react";
+import type { Poi } from "./api";
 import { getLang, locale, poiName, t } from "./i18n";
+
+export { ClaimBadge } from "./components/ClaimBadge"; // W10-P4-3: trang cũ vẫn import từ ui
 
 export const vnd = (n: number) => (getLang() === "en" ? `${n.toLocaleString(locale())} VND` : `${n.toLocaleString(locale())} đ`);
 export const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/gi, "d").toLowerCase();
@@ -40,10 +42,29 @@ export function priceText(p: Poi) {
   return p.category === "attraction" ? t("Giá vé chưa xác minh", "Ticket price not verified") : t("Giá chưa xác minh", "Price not verified");
 }
 
+/** Ghi chú ảnh minh hoạ theo loại điểm: quán ăn dùng ảnh món Huế; điểm khác (vd Làng hương Thủy Xuân) dùng ảnh chụp ở Huế
+ * nhưng không tại chính điểm đó. */
+export const illustrativeNote = (p: Poi) => (p.category === "food"
+  ? t("Ảnh minh hoạ món Huế, không phải ảnh của quán", "Illustrative photo of Hue food, not taken at this restaurant")
+  : t("Ảnh minh hoạ chụp ở Huế, không chụp tại địa điểm này", "Illustrative photo taken in Hue, not at this place"));
+
 export function Photo({ poi, eager = false }: { poi: Poi; eager?: boolean }) {
-  if (!poi.image) return <div className="no-photo">{t("Chưa có ảnh có giấy phép cho địa điểm này", "No licensed photo for this place yet")}</div>;
+  const [broken, setBroken] = useState<string | null>(null); // file ảnh không tải được (vd chưa có trong web/public/poi)
+  if (!poi.image || broken === poi.image.file) return <div className="no-photo">{t("Chưa có ảnh có giấy phép cho địa điểm này", "No licensed photo for this place yet")}</div>;
   const name = poiName(poi);
-  return <img src={poi.image.file} alt={poi.image.illustrative ? t(`Ảnh minh hoạ món ăn Huế cho ${name}`, `Illustrative photo of Hue food for ${name}`) : name} loading={eager ? "eager" : "lazy"} />;
+  const file = poi.image.file;
+  return <img src={file} alt={poi.image.illustrative ? t(`Ảnh minh hoạ cho ${name}`, `Illustrative photo for ${name}`) : name} loading={eager ? "eager" : "lazy"} onError={() => setBroken(file)} />;
+}
+
+/** Ghi công ảnh (bắt buộc với CC BY / CC BY-SA): tác giả, giấy phép, link nguồn; ảnh minh hoạ ghi rõ. */
+export function PhotoCredit({ poi }: { poi: Poi }) {
+  if (!poi.image) return null;
+  return (
+    <p className="muted tiny credit">
+      {poi.image.illustrative && `${illustrativeNote(poi)}. `}
+      {t("Ảnh", "Photo")}: <a href={poi.image.source_url} target="_blank" rel="noreferrer">{poi.image.author}</a>, {poi.image.license}, Wikimedia Commons
+    </p>
+  );
 }
 
 export function PoiCard({ poi }: { poi: Poi }) {
@@ -55,7 +76,7 @@ export function PoiCard({ poi }: { poi: Poi }) {
         <h3>{poiName(poi)}</h3>
         <p className="muted small">{hoursText(poi.opening_hours)}</p>
         <p className="card-price">{priceText(poi)}</p>
-        {poi.image?.illustrative && <p className="muted tiny">{t("Ảnh minh hoạ món Huế, không phải ảnh của quán", "Illustrative photo of Hue food, not taken at this restaurant")}</p>}
+        {poi.image?.illustrative && <p className="muted tiny">{illustrativeNote(poi)}</p>}
       </div>
     </a>
   );
@@ -79,22 +100,6 @@ export function Carousel({ title, sub, pois }: { title: string; sub?: string; po
       </div>
       <div className="rail-track" ref={track}>{pois.map((p) => <PoiCard key={p.poi_id} poi={p} />)}</div>
     </section>
-  );
-}
-
-const CLAIM_LABEL: Record<Claim["claim_type"], [string, string]> = {
-  opening_hours: ["Giờ", "Hours"], price: ["Giá", "Price"], festival_date: ["Ngày lễ", "Festival date"], weather: ["Thời tiết", "Weather"], distance: ["Di chuyển", "Travel"],
-};
-
-/** UC-11: claim sai không bao giờ hiện giá trị sai, chỉ hiện giá trị đã sửa theo nguồn. */
-export function ClaimBadge({ c }: { c: Claim }) {
-  const label = t(...CLAIM_LABEL[c.claim_type]);
-  if (c.status === "contradicted") return <span className="tag fixed">{label}: {t("đã sửa theo nguồn", "corrected from source")}, {c.corrected_text}</span>;
-  if (c.status === "unverified") return <span className="tag warn">{label}: {t("chưa xác minh", "not verified")}</span>;
-  return (
-    <a className="tag ok" href={c.source_url ?? undefined} target="_blank" rel="noreferrer" title={t(`Xác minh ngày ${c.verified_at?.slice(0, 10) ?? ""}`, `Verified on ${c.verified_at?.slice(0, 10) ?? ""}`)}>
-      {label}: {t("đã xác minh", "verified")}
-    </a>
   );
 }
 

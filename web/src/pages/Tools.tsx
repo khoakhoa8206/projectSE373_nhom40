@@ -3,7 +3,7 @@ import { api, type ApiError, type Claim, type MemoryRow, type Narration, type Po
 import type { Shell } from "../App";
 import { distanceM, nearestPoi, useSessionLocation } from "../location";
 import { getLang, poiName, t } from "../i18n";
-import { ClaimBadge, Empty, interest, Skeleton } from "../ui";
+import { ClaimBadge, Empty, interest, Photo, PhotoCredit, Skeleton } from "../ui";
 
 const KIND: Record<string, [string, string]> = {
   food_like: ["Món thích", "Favourite food"], food_dislike: ["Món không ăn", "Food to avoid"], allergy: ["Dị ứng", "Allergy"],
@@ -25,6 +25,7 @@ export function NarratePage({ shell, preset }: { shell: Shell; preset: string | 
   const [error, setError] = useState("");
   const here = useSessionLocation();
   const nearest = nearestPoi(here.coords, attractions);
+  const selected = attractions.find((p) => p.poi_id === poiId); // ảnh của điểm đang chọn để thuyết minh
 
   if (!shell.user) return <NeedLogin shell={shell} />;
   async function ask(q: string, poi: string) {
@@ -69,6 +70,12 @@ export function NarratePage({ shell, preset }: { shell: Shell; preset: string | 
           <option value="">{t("Tìm trong toàn bộ kho", "Search the whole knowledge base")}</option>
           {attractions.map((p) => <option key={p.poi_id} value={p.poi_id}>{poiName(p)}</option>)}
         </select>
+        {selected && (
+          <figure className="narrate-photo">
+            <Photo poi={selected} />
+            <figcaption><PhotoCredit poi={selected} /></figcaption>
+          </figure>
+        )}
         <label htmlFor="n-q">{t("Câu hỏi", "Question")}</label>
         <input id="n-q" required={!poiId} maxLength={500} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={t("Ngọ Môn được xây năm nào?", "When was the Noon Gate built?")} />
         <label className="check"><input type="checkbox" checked={detail} onChange={(e) => setDetail(e.target.checked)} /> {t("Bản chi tiết", "Detailed version")}</label>
@@ -210,7 +217,7 @@ export function CreditsPage({ pois }: { pois: Poi[] }) {
   return (
     <div className="wrap page">
       <h1>{t("Nguồn ảnh và giấy phép", "Photo credits and licences")}</h1>
-      <p className="muted">{t("Ảnh lấy từ Wikimedia Commons với giấy phép cho phép tái sử dụng. Ảnh món ăn là ảnh minh hoạ, không chụp tại quán được nhắc.", "Photos come from Wikimedia Commons under reuse-friendly licences. Food photos are illustrative, not taken at the named restaurant.")}</p>
+      <p className="muted">{t("Ảnh lấy từ Wikimedia Commons với giấy phép cho phép tái sử dụng. Ảnh ghi “minh hoạ” (món ăn, Làng hương Thủy Xuân) không chụp tại chính địa điểm đó.", "Photos come from Wikimedia Commons under reuse-friendly licences. Photos marked “illustrative” (food, Thuy Xuan incense village) were not taken at that exact place.")}</p>
       <div className="credits">
         {withImage.map((p) => (
           <div key={p.poi_id}>

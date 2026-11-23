@@ -3,9 +3,10 @@ import { api, resume, type ApiError, type Decision, type RunRow, type Slot, type
 import type { Shell } from "../App";
 import AgentStream from "../components/AgentStream";
 import ApprovalCard from "../components/ApprovalCard";
+import { NearestPlace } from "../components/NearestPlace";
 import MapView, { DAY_COLORS } from "../MapView";
 import { getLang, poiName, t } from "../i18n";
-import { distanceM, nearestPoi, useSessionLocation } from "../location";
+import { nearestPoi, useSessionLocation } from "../location";
 import { ClaimBadge, Empty, go, interest, localIso, Photo, Skeleton, vnd } from "../ui";
 import { status } from "./Plan";
 
@@ -154,6 +155,7 @@ function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell:
   const here = useSessionLocation();
   const stops = it.slots.flatMap((s) => (s.lat != null && s.lon != null ? [{ ...s, lat: s.lat, lon: s.lon }] : []));
   const nearest = nearestPoi(here.coords, stops);
+  const nearestPlace = nearest && shell.pois.find((p) => p.poi_id === nearest.poi_id); // ảnh, giờ, giá có nguồn của điểm đó
   return (
     <div className="plan-grid">
       <div>
@@ -204,18 +206,16 @@ function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell:
       </div>
       <div className="map-stick">
         <div className="here-bar">
-          {here.coords && nearest ? (
-            <>
-              <span className="small">{t("Gần bạn nhất trong lịch", "Closest stop to you")}: <b>{poiName(nearest)}</b>{" "}
-                ({(distanceM(here.coords, nearest) / 1000).toFixed(1)} km {t("đường chim bay", "as the crow flies")})</span>
-              <button className="ghost" onClick={here.clear}>{t("Tắt vị trí", "Turn off location")}</button>
-            </>
-          ) : (
+          {!(here.coords && nearest) && (
             <button onClick={here.request} disabled={here.asking}>{here.asking ? t("Đang lấy vị trí...", "Getting location...") : t("Lấy vị trí hiện tại", "Use my current location")}</button>
           )}
           {here.error && <p className="warn small" role="alert">{here.error}</p>}
         </div>
-        <MapView slots={it.slots} pois={[]} here={here.coords} />
+        {here.coords && nearest && nearestPlace && (
+          <NearestPlace poi={nearestPlace} here={here.coords} title={t("Điểm gần bạn nhất trong lịch", "Closest stop in your itinerary")} onClear={here.clear}
+            extra={<p className="small">{t(`Ngày ${nearest.day_index}`, `Day ${nearest.day_index}`)} · {nearest.start_time} - {nearest.end_time}</p>} />
+        )}
+        <MapView slots={it.slots} pois={[]} here={here.coords} nearest={nearest && { lat: nearest.lat, lon: nearest.lon, name: poiName(nearest) }} />
         <p className="muted tiny">{t("Đường liền là đường đi thực tế bằng ô tô (định tuyến OSRM trên dữ liệu OSM). Nét đứt: chưa lấy được tuyến, chỉ nối thẳng theo thứ tự tham quan.", "Solid lines are real driving routes (OSRM routing on OSM data). Dashed: route unavailable, straight line in visiting order.")} {t("Vị trí của bạn chỉ hiện trên máy này, không gửi lên máy chủ.", "Your location stays on this device and is never sent to the server.")}</p>
       </div>
     </div>
