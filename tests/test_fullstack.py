@@ -14,6 +14,7 @@ FORM = {"start_date": "2026-11-25", "end_date": "2026-11-26", "adults": 2, "chil
 @pytest.fixture(scope="module")
 def client(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("ui")
+    import agent.src.api.server  # noqa: F401 — load_dotenv của server chạy TRƯỚC khi xoá LLM_API_KEY bên dưới
     patch = pytest.MonkeyPatch()
     patch.setenv("DB_PATH", str(tmp / "t.db"))
     patch.setenv("TRACE_DIR", str(tmp / "traces"))
