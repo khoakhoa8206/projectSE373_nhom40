@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from agent.db import repo
 from agent.schemas import Child, Itinerary, TripProfile
+from agent.src.api import server
 from agent.src.api.server import app, current_user, own_trip, plan_trip
 from agent.src.graph import app as graph
 from agent.src.graph.checkpoint import open_checkpointer
@@ -26,6 +27,7 @@ from fullstack.intake import analyse, detect_lang
 HAS_LLM = bool(os.environ.get("LLM_API_KEY"))
 if not HAS_LLM:
     graph.make_client = DemoLLM  # không có key: chỉ planner UC-02 là bản giả; thuyết minh, nhật ký vẫn báo cần key
+    server.REVIEW = False  # 3 reviewer UC-06 cần LLM thật, planner giả không review được
 
 IMAGES = Path(__file__).resolve().parents[1] / "data/destinations/hue/poi_images.csv"
 VERIFY_LOCK = threading.Lock()
@@ -65,12 +67,51 @@ def _claims(itinerary: dict, trip_id: str, user_id: str):
     return read()
 
 
-def _review(itinerary_id: str):
-    """UC-06 thuộc Phase 3: hai bảng còn rỗng thì giao diện ẩn tab Review."""
-    reports = repo.query("SELECT * FROM review_reports WHERE itinerary_id = ? ORDER BY round, report_id", (itinerary_id,))
+def _review(itinerary: dict):
+    """UC-06: báo cáo mọi vòng review của lượt chạy (vòng 1 nằm ở bản lịch trước, đã superseded) kèm tên POI của slot,
+    và coordination trace (orchestrator ↔ reviewer ↔ planner) dựng từ trace_events của lượt chạy đó."""
+    run_id = itinerary["run_id"]
+    reports = repo.query(
+        """SELECT r.* FROM review_reports r JOIN itineraries i USING (itinerary_id) WHERE i.run_id = ?
+           ORDER BY r.created_at, r.round, r.reviewer""",
+        (run_id,),
+    )
     for r in reports:
-        r["findings"] = repo.query("SELECT * FROM review_findings WHERE report_id = ?", (r["report_id"],))
-    return {"reports": reports, "coordination": []}
+        r["findings"] = repo.query(
+            """SELECT f.*, s.day_index, s.start_time, p.name_vi, p.name_en FROM review_findings f
+               LEFT JOIN itinerary_slots s ON s.slot_id = f.slot_ref LEFT JOIN pois p ON p.poi_id = s.poi_id
+               WHERE f.report_id = ? ORDER BY f.finding_id""",
+            (r["report_id"],),
+        )
+    events = repo.query(
+        """SELECT ts, node, kind, name, args, result, error FROM trace_events WHERE run_id = ?
+           AND (node LIKE 'reviewer.%' OR (node = 'review' AND kind = 'guardrail')) ORDER BY seq""",
+        (run_id,),
+    )
+    return {"reports": reports, "coordination": [m for e in events if (m := _message(e))]}
+
+
+def _message(e):
+    """1 dòng trace của UC-06 → 1 thông điệp giữa các agent; tool_call / llm_call xem ở trace viewer."""
+    who = e["node"].removeprefix("reviewer.")
+    args, result = (json.loads(e[k]) if e[k] else {} for k in ("args", "result"))
+    msg = {"ts": e["ts"], "from": "orchestrator", "to": who}
+    if e["kind"] == "node_start":
+        return msg | {"message": f"gửi lịch trình {args.get('itinerary_id')} để review vòng {args.get('round')}"}
+    if e["kind"] == "node_end":
+        verdict = "chấp thuận" if result.get("verdict") == "approve" else "yêu cầu sửa"
+        return msg | {"from": who, "to": "orchestrator", "message": f"{verdict}, {len(result.get('findings', []))} phát hiện"}
+    if e["kind"] == "error":
+        return msg | {"from": who, "to": "orchestrator", "message": f"lỗi, bỏ qua ý kiến của reviewer này ({e['error'][:120]})"}
+    if e["name"] == "tool_denied":
+        return msg | {"from": "harness", "message": f"chặn tool {args.get('tool')} (không có trong permissions.yaml)"}
+    if e["name"] == "unknown_slot_ref":
+        return msg | {"message": f"bỏ phát hiện trỏ slot không tồn tại: {', '.join(map(str, result.get('dropped', [])))}"}
+    if e["name"] == "review_round":
+        if result.get("again"):
+            return msg | {"to": "planner", "message": f"gửi {result.get('to_fix')} phát hiện mức trung bình/cao để lập lại lịch"}
+        return msg | {"to": "người dùng", "message": f"chốt lịch trình sau {result.get('round')} vòng review"}
+    return None
 
 
 def _journals(trip_id: str):
@@ -240,7 +281,7 @@ def trip_detail(trip_id: str, user_id: str = Depends(current_user)):
         "pending": pending[0] if pending else None,
         "itinerary": itinerary,
         "claims": _claims(itinerary, trip_id, user_id) if itinerary else [],
-        "review": _review(itinerary["itinerary_id"]) if itinerary else {"reports": [], "coordination": []},
+        "review": _review(itinerary) if itinerary else {"reports": [], "coordination": []},
         "events": repo.trip_events(trip_id),
         "journal": _journals(trip_id),
         "runs": runs,

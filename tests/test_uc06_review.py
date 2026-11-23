@@ -168,3 +168,20 @@ def test_without_review_flag_graph_skips_reviewers(db):
     res = app.run_uc02(new_trip(), "u-ha", client=TeamLLM({}), tools=TOOLS)
     assert res["status"] == "validated"
     assert not repo.query("SELECT 1 FROM trace_events WHERE run_id = ? AND node LIKE 'reviewer.%'", (res["run_id"],))
+
+
+def test_ui_review_shows_both_rounds_and_coordination(db, monkeypatch):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)  # import lần đầu: fullstack.api chọn planner giả như test_fullstack
+    from fullstack.api import _review
+
+    answers = iter([safety_rejects, lambda _ids: APPROVE])
+    res, its, _ = run_reviewed({"safety": lambda ids: next(answers)(ids)})
+    trip_id = repo.query("SELECT trip_id FROM runs WHERE run_id = ?", (res["run_id"],))[0]["trip_id"]
+    out = _review(repo.itinerary_for_trip(trip_id))
+
+    assert [r["round"] for r in out["reports"]] == [1, 1, 1, 2, 2, 2]  # vòng 1 ở bản lịch đã superseded vẫn hiện
+    first = next(r for r in out["reports"] if r["reviewer"] == "safety" and r["round"] == 1)
+    assert first["findings"][0]["name_vi"]  # finding gắn tên POI của slot, kể cả slot của bản cũ
+    talk = [(m["from"], m["to"]) for m in out["coordination"]]
+    assert ("orchestrator", "safety") in talk and ("safety", "orchestrator") in talk
+    assert talk.count(("orchestrator", "planner")) == 1 and talk[-1] == ("orchestrator", "người dùng")
