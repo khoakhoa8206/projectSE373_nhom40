@@ -16,6 +16,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: ruff check .
       - run: pytest -q
+      - run: python scripts/scan_coords.py  # 0 toạ độ chính xác trong trace/log/kết quả eval đã commit
 
   gitleaks:  # chặn lộ key: quét toàn bộ lịch sử Git
     runs-on: ubuntu-latest
