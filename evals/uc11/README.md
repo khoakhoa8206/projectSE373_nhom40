@@ -34,8 +34,10 @@
 | `wrong_distance` | 2 | |
 | `wrong_weather`, `entity_not_found` | 2 | |
 
-**Còn thiếu:** 3 câu riêng cho RAG (`docs/uc-11.md` mục 12.2) và ngày lễ hội "đúng" để kỳ vọng `contradicted`: cần
-`retrieve_knowledge` của P3 + tài liệu lễ hội có nguồn.
+**Còn thiếu:** 3 câu riêng cho RAG (`docs/uc-11.md` mục 12.2) và ngày lễ hội "đúng" để kỳ vọng `contradicted`. Từ W10-P4-4
+verifier đã lấy bằng chứng lễ hội qua `retrieve_knowledge` (test bằng retriever giả: `tests/test_uc11_festival.py`), nhưng
+kho `kb/docs` (22/11/2026) **chưa có tài liệu nào ghi ngày lễ hội**, và DB của runner không nạp kho tri thức. Khi P3 thêm tài
+liệu lễ hội có nguồn thì thêm câu vào đây và cho runner nạp kho (`python -m agent.src.rag.ingest`).
 
 ## Chạy
 
@@ -46,3 +48,24 @@
   `scorer.score(case, conn, run_id)`; `scorer.metrics([(case, kết quả)])` tổng hợp chỉ số mục 12.3. UC-11 **không chạy graph
   UC-02**: đầu vào là câu trả lời nháp.
 - Mặc định tách claim bằng regex (tất định). `UC11_EXTRACTOR=llm` để đo bản LLM + lưới regex (cần key, kết quả dao động).
+
+## Đo với LLM thật + chi phí verifier (W10-P4-2)
+
+`run_case` đóng run với token / chi phí / độ trễ của **riêng verifier** cho mỗi câu trả lời (LLM tách claim qua skill
+`fact-check-travel-info`; tra tool và gắn nhãn là code, không tốn token), nên `summary.csv` của runner có cột `tokens`, `cost`,
+`latency_ms` đúng nghĩa. `score()["metrics"]` ghi đủ số để tổng hợp lại không cần chạy lại:
+
+```bash
+# cần LLM_API_KEY trong .env; tắt mock-weather / run.py đang chạy (runner tự bật mock ở cổng 8081)
+UC11_EXTRACTOR=llm python -m evals.run --uc UC-11        # → results/uc11-<thời gian>/
+python -m evals.uc11.report results/uc11-<thời gian>      # in bảng dưới đây + ghi metrics.json
+```
+
+| Lượt | Tách claim | Case pass | Recall claim sai | Báo nhầm | Lọt | Thời tiết bất thường | Token / câu (vào / ra) | Chi phí / câu | Độ trễ / câu |
+|---|---|---|---|---|---|---|---|---|---|
+| 22/11/2026, dữ liệu Huế thật, 24 câu | regex | 24/24 | 100 % | 0 % | 0 | 100 % | 0 / 0 | 0 USD | ~105 ms |
+| run #1 (24/11) | llm + lưới regex | _chưa chạy_ | | | | | | | |
+
+Hàng regex đo bằng đúng `run_case` + `score` + `report` trên DB tạm có dữ liệu Huế thật, mock-weather trong tiến trình (như
+`tests/test_uc11_cases.py`). Hàng LLM **chưa có số**: máy soạn ticket chưa có `LLM_API_KEY`; chạy hai lệnh trên ở run #1 rồi điền
+bảng. Số regex lạc quan vì câu và regex do cùng một người viết; số LLM mới cho biết verifier chịu được cách viết tự nhiên.

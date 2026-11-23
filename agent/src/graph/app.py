@@ -1,4 +1,5 @@
 """Graph UC-02: load_profile → plan → validate → (còn vi phạm và < 4 vòng thì quay lại plan) → finalize
+→ verify (UC-11: kiểm giờ/giá/di chuyển theo tool, sửa bằng code, ghi lại DB trước khi PWA đọc)
 → approve (người dùng duyệt / sửa / từ chối, chỉ khi approval=True) → END, hoặc quay lại plan nếu người dùng sửa;
 duyệt xong → remember (UC-07: đề xuất lưu sở thích, người dùng chọn mục nào được lưu) → END.
 Chạy có checkpointer SQLite (thread_id = trip_id): backend chết giữa chừng thì continue_run chạy tiếp đúng node;
@@ -20,6 +21,7 @@ from agent.src.graph.loop import AgentLoopLimitError, make_client, ms
 from agent.src.nodes import intake as uc01
 from agent.src.nodes import memory
 from agent.src.nodes.plan import plan
+from agent.src.nodes.verify import present_itinerary
 from agent.src.validation.validator import check_fabrication, validate
 
 MAX_ROUNDS = 4
@@ -168,6 +170,13 @@ def finalize(state):
     return {"itinerary": itinerary}
 
 
+def verify(state, usage=None):
+    """UC-11 (P4): không claim sai nào tới PWA. Kiểm lịch trình vừa lưu, sửa giá/di chuyển sai bằng số của tool, giờ
+    ngoài giờ mở cửa thì gắn "chưa xác minh"; ghi bản đã sửa vào DB. Đứng trước approve nên chạy lại được khi resume.
+    Token LLM tách claim cộng vào usage của lượt chạy (chi phí verifier nằm trong runs như mọi node)."""
+    return {"itinerary": present_itinerary(state["itinerary"], state["run_id"], usage=usage)}
+
+
 def ask_human(kind, data):
     """Dừng graph chờ người dùng (W8-P1-2): ask_user (UC-01), duyệt lịch trình, đồng ý lưu bộ nhớ (UC-07).
     drive() ghi approvals + trace và trả payload {kind, approval_id, data} cho PWA. Khi người dùng trả lời, LangGraph
@@ -244,12 +253,14 @@ def add_planning(g, client, tools, usage):
     g.add_node("plan", traced("plan", lambda s: plan_or_keep_best(s, client, tools, usage)))
     g.add_node("validate", traced("validate", check))
     g.add_node("finalize", traced("finalize", finalize))
+    g.add_node("verify", traced("verify", lambda s: verify(s, usage)))
     g.add_node("approve", traced("approve", approve))
     g.add_node("remember", traced("remember", remember))
     g.add_edge("load_profile", "plan")
     g.add_conditional_edges("plan", lambda s: "finalize" if s.get("planning_stopped") else "validate")
     g.add_conditional_edges("validate", lambda s: "plan" if s["violations"] and s["round"] < MAX_ROUNDS else "finalize")
-    g.add_conditional_edges("finalize", lambda s: "approve" if s.get("approval") else END)
+    g.add_edge("finalize", "verify")
+    g.add_conditional_edges("verify", lambda s: "approve" if s.get("approval") else END)
     g.add_conditional_edges("approve", lambda s: {"edited": "plan", "approved": "remember"}.get(s["decision"], END))
     g.add_edge("remember", END)
     return g
