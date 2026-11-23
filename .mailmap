@@ -1,0 +1,5 @@
+# Gộp commit cũ về 1 tên + 1 email mỗi người (git shortlog -sne). Định dạng: <tên chuẩn> <email chuẩn> <tên cũ> <email cũ>
+khoakhoa8206 <dangkhoa.vt.vn@gmail.com> Nguyễn Đăng Khoa <dangkhoa.vt.vn@gmail.com>
+EnnKhang <24520748@gm.uit.edu.vn> EnnKhang <ngohoankhang@gmail.com>
+EnnKhang <24520748@gm.uit.edu.vn> ngohoangkhang30 <24520748@gm.uit.edu.vn>
+hoangkhang1304 <24520754@gm.uit.edu.vn> khangnguyen13042006 <khangnguyen.13042006@gmail.com>
