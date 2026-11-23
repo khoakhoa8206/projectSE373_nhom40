@@ -123,3 +123,48 @@ def test_tool_outside_permissions_is_blocked_and_traced(db):
     assert agent_loop(FakeLLM(script), "sys", "user", tools, Out, run_id, "reviewer.safety", usage).ok
     ev = repo.query("SELECT node, kind, name FROM trace_events WHERE run_id = ? AND kind != 'llm_call'", (run_id,))
     assert ev == [{"node": "reviewer.safety", "kind": "guardrail", "name": "tool_denied"}]
+
+
+class TeamLLM:
+    """Planner dùng FakeLLM của UC-02, reviewer dùng ReviewerLLM; ghi lại input của planner để kiểm findings."""
+
+    def __init__(self, reports):
+        self.planner, self.reviewers, self.planner_inputs = FakeLLM(), ReviewerLLM(reports), []
+        self.chat = NS(completions=NS(create=self.create))
+
+    def create(self, **kw):
+        if any(role in kw["messages"][0]["content"] for role in ROLES.values()):
+            return self.reviewers.create(**kw)
+        self.planner_inputs.append(kw["messages"][1]["content"])
+        return self.planner.create(**kw)
+
+
+def run_reviewed(reports):
+    trip_id = new_trip()
+    llm = TeamLLM(reports)
+    res = app.run_uc02(trip_id, "u-ha", client=llm, tools=TOOLS, review=True)
+    its = repo.query("SELECT itinerary_id, status, review_rounds FROM itineraries WHERE trip_id = ? ORDER BY version",
+                     (trip_id,))  # fmt: skip
+    return res, its, llm
+
+
+def test_findings_go_back_to_planner_then_second_round_approves(db):
+    answers = iter([safety_rejects, lambda _ids: APPROVE])  # vòng 1 safety chặn, vòng 2 duyệt
+    res, its, llm = run_reviewed({"safety": lambda ids: next(answers)(ids)})
+    assert res["error"] is None and res["status"] == "reviewed"
+    assert [(i["status"], i["review_rounds"]) for i in its] == [("superseded", 1), ("reviewed", 2)]
+    assert [r["round"] for r in repo.reviews_for_itinerary(its[0]["itinerary_id"])] == [1, 1, 1]
+    assert [r["round"] for r in repo.reviews_for_itinerary(its[1]["itinerary_id"])] == [2, 2, 2]
+    assert "restricted_area" in llm.planner_inputs[-1] and "restricted_area" not in llm.planner_inputs[0]
+
+
+def test_review_stops_after_two_rounds_even_if_still_rejected(db):
+    res, its, llm = run_reviewed({"safety": safety_rejects})
+    assert res["status"] == "reviewed" and [i["review_rounds"] for i in its] == [1, 2]
+    assert llm.reviewers.calls.count("safety") == 2
+
+
+def test_without_review_flag_graph_skips_reviewers(db):
+    res = app.run_uc02(new_trip(), "u-ha", client=TeamLLM({}), tools=TOOLS)
+    assert res["status"] == "validated"
+    assert not repo.query("SELECT 1 FROM trace_events WHERE run_id = ? AND node LIKE 'reviewer.%'", (res["run_id"],))

@@ -1,4 +1,5 @@
 """Graph UC-02: load_profile → plan → validate → (còn vi phạm và < 4 vòng thì quay lại plan) → finalize
+→ review (UC-06, chỉ khi review=True và lịch validated: 3 reviewer; còn findings và < 2 vòng thì quay lại plan)
 → approve (người dùng duyệt / sửa / từ chối, chỉ khi approval=True) → END, hoặc quay lại plan nếu người dùng sửa;
 duyệt xong → remember (UC-07: đề xuất lưu sở thích, người dùng chọn mục nào được lưu) → END.
 Chạy có checkpointer SQLite (thread_id = trip_id): backend chết giữa chừng thì continue_run chạy tiếp đúng node;
@@ -20,6 +21,7 @@ from agent.src.graph.loop import AgentLoopLimitError, make_client, ms
 from agent.src.nodes import intake as uc01
 from agent.src.nodes import memory
 from agent.src.nodes.plan import plan
+from agent.src.nodes.review import review
 from agent.src.validation.validator import check_fabrication, validate
 
 MAX_ROUNDS = 4
@@ -52,6 +54,10 @@ class State(TypedDict, total=False):
     intake: dict  # UC-01: {route, questions, conflicts, message} của lượt intake gần nhất
     approval_decision: str  # graph duyệt riêng của P2 (build_approval_graph)
     feedback: str
+    review: bool  # UC-06: lịch trình validated có qua 3 reviewer không (API: có; eval UC-02/test cũ: không)
+    review_round: int  # số vòng review đã chạy (≤ 2)
+    review_findings: list[dict]  # findings medium/high của vòng review gần nhất, planner sửa theo
+    review_again: bool
 
 
 def default_tools():
@@ -141,7 +147,8 @@ def finalize(state):
     if best is None:
         best, remaining = state["itinerary"], state["violations"]
     status = "failed_validation" if remaining else "validated"
-    itinerary = best.model_copy(deep=True, update={"status": status, "planner_rounds": state["round"]})
+    itinerary = best.model_copy(deep=True, update={"status": status, "planner_rounds": state["round"],
+                                                   "review_rounds": state.get("review_round", 0)})  # fmt: skip
     if state.get("planning_warning"):
         first = itinerary.slots[0]
         first.note = "; ".join(filter(None, (first.note, state["planning_warning"])))
@@ -178,6 +185,24 @@ def ask_human(kind, data):
     return interrupt({"kind": kind, "data": data})
 
 
+def fresh_plan():
+    """Bắt đầu 1 lượt lập lịch mới (bản mới, đủ 4 vòng validator) dựa trên state["itinerary"] làm bản trước."""
+    return {"round": 0, "violations": [], "history": [], "itinerary_id": repo.new_id("it"), "best_itinerary": None,
+            "best_violations": None, "best_score": None, "planning_stopped": False, "planning_warning": None}  # fmt: skip
+
+
+def review_node(state, client, tools, usage):
+    """UC-06: 3 reviewer. Còn findings medium/high và chưa đủ 2 vòng → planner lập lại theo findings."""
+    out = review(state, client, tools, usage)
+    return out | fresh_plan() if out["review_again"] else out
+
+
+def after_finalize(state):
+    if state.get("review") and state["itinerary"].status == "validated":
+        return "review"
+    return "approve" if state.get("approval") else END
+
+
 def approve(state):
     """Người dùng duyệt lịch trình: duyệt → approved; sửa → lập lại theo ghi chú; từ chối → quay về hồ sơ."""
     itinerary = state["itinerary"]
@@ -188,9 +213,8 @@ def approve(state):
         repo.query("UPDATE trips SET status = 'approved', updated_at = ? WHERE trip_id = ?", (ts, state["trip_id"]))
         return {"decision": decision, "itinerary": itinerary.model_copy(update={"status": "approved"})}
     if decision == "edited":  # lượt lập lịch mới (đủ 4 vòng) dựa trên bản vừa xem + ghi chú của người dùng
-        return {"decision": decision, "user_feedback": str(answer.get("response") or ""), "round": 0, "violations": [],
-                "history": [], "itinerary_id": repo.new_id("it"), "best_itinerary": None, "best_violations": None,
-                "best_score": None, "planning_stopped": False, "planning_warning": None}  # fmt: skip
+        return fresh_plan() | {"decision": decision, "user_feedback": str(answer.get("response") or ""),
+                               "review_round": 0, "review_findings": None}  # fmt: skip
     if previous := state.get("approved_before"):  # từ chối bản sửa → bản đã duyệt trước đó lại là bản mới nhất
         new_id = repo.new_id("it")
         slots = [s.model_copy(update={"slot_id": s.slot_id.replace(previous.itinerary_id, new_id, 1)}) for s in previous.slots]
@@ -244,12 +268,14 @@ def add_planning(g, client, tools, usage):
     g.add_node("plan", traced("plan", lambda s: plan_or_keep_best(s, client, tools, usage)))
     g.add_node("validate", traced("validate", check))
     g.add_node("finalize", traced("finalize", finalize))
+    g.add_node("review", traced("review", lambda s: review_node(s, client, tools, usage)))
     g.add_node("approve", traced("approve", approve))
     g.add_node("remember", traced("remember", remember))
     g.add_edge("load_profile", "plan")
     g.add_conditional_edges("plan", lambda s: "finalize" if s.get("planning_stopped") else "validate")
     g.add_conditional_edges("validate", lambda s: "plan" if s["violations"] and s["round"] < MAX_ROUNDS else "finalize")
-    g.add_conditional_edges("finalize", lambda s: "approve" if s.get("approval") else END)
+    g.add_conditional_edges("finalize", after_finalize)
+    g.add_conditional_edges("review", lambda s: "plan" if s["review_again"] else "approve" if s.get("approval") else END)
     g.add_conditional_edges("approve", lambda s: {"edited": "plan", "approved": "remember"}.get(s["decision"], END))
     g.add_edge("remember", END)
     return g
@@ -334,22 +360,26 @@ def summarize(run_id, out, error):
             "interrupt": pending[0] if pending else None}  # fmt: skip
 
 
-def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None, run_id=None, approval=False, revise=None):
+def run_uc02(trip_id, user_id, eval_case_id=None, client=None, tools=None, run_id=None, approval=False, revise=None,
+             review=False):
     """Chạy 1 lượt UC-02 và luôn đóng run (token, chi phí, độ trễ). approval=True: dừng chờ người dùng duyệt.
     revise = (lịch đã duyệt, ghi chú): lập lại theo ghi chú như nút "sửa"; từ chối bản mới thì giữ bản cũ.
+    review=True: lịch trình validated qua 3 reviewer UC-06 (≤ 2 vòng) trước khi tới bước duyệt.
     Trả {run_id, itinerary_id, status, error, interrupt}."""
     run_id = run_id or repo.create_run("UC-02", trip_id, user_id, eval_case_id)
-    state = {"run_id": run_id, "trip_id": trip_id, "itinerary_id": repo.new_id("it"), "approval": approval}
+    state = {"run_id": run_id, "trip_id": trip_id, "itinerary_id": repo.new_id("it"), "approval": approval,
+             "review": review}  # fmt: skip
     if revise:
         previous, note = revise
         state |= {"itinerary": previous, "user_feedback": note, "approved_before": previous}
     return summarize(run_id, *drive("UC-02", run_id, trip_id, state, client, tools))
 
 
-def run_uc01(trip_id, user_id, client=None, tools=None, run_id=None):
+def run_uc01(trip_id, user_id, client=None, tools=None, run_id=None, review=False):
     """Lượt hội thoại UC-01 (tin nhắn đã lưu trong messages): intake → hỏi lại → lập lịch → duyệt → lưu bộ nhớ."""
     run_id = run_id or repo.create_run("UC-01", trip_id, user_id)
-    state = {"run_id": run_id, "trip_id": trip_id, "user_id": user_id, "itinerary_id": repo.new_id("it"), "approval": True}
+    state = {"run_id": run_id, "trip_id": trip_id, "user_id": user_id, "itinerary_id": repo.new_id("it"), "approval": True,
+             "review": review}  # fmt: skip
     return summarize(run_id, *drive("UC-01", run_id, trip_id, state, client, tools))
 
 
