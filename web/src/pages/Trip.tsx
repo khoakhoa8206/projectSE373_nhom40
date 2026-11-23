@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { api, resume, type ApiError, type Decision, type RunRow, type Slot, type TraceEvent, type TripDetail } from "../api";
+import { api, resume, type ApiError, type Decision, type Finding, type RunRow, type Slot, type TraceEvent, type TripDetail } from "../api";
 import type { Shell } from "../App";
 import AgentStream from "../components/AgentStream";
 import ApprovalCard from "../components/ApprovalCard";
@@ -225,7 +225,11 @@ function PlanTab({ d, shell, claimsOf, reload, tripId }: { d: TripDetail; shell:
 function ReviewTab({ d }: { d: TripDetail }) {
   const { reports, coordination } = d.review;
   if (!reports.length) return <Empty title={t("Chưa có kết quả review", "No review results yet")} />;
-  const name = (ref: string | null) => { const s = d.itinerary?.slots.find((x) => x.slot_id === ref); return s && poiName(s); };
+  const where = (f: Finding) => {
+    if (!f.slot_ref) return t("cả chuyến", "whole trip");
+    const day = f.day_index ? `${t("ngày", "day")} ${f.day_index}, ${f.start_time}` : "";
+    return [poiName(f), day].filter(Boolean).join(" · ");
+  };
   return (
     <div className="review">
       {reports.map((r) => (
@@ -235,7 +239,7 @@ function ReviewTab({ d }: { d: TripDetail }) {
           {r.findings.length === 0 && <p className="muted small">{t("Không có phát hiện nào.", "No findings.")}</p>}
           {r.findings.map((f, i) => (
             <div key={i} className="finding">
-              <p><b>{t("Mức", "Severity")} {t(SEVERITY[f.severity][0], SEVERITY[f.severity][1])}</b>{name(f.slot_ref) && `, ${name(f.slot_ref)}`}</p>
+              <p><b>{t("Mức", "Severity")} {t(SEVERITY[f.severity][0], SEVERITY[f.severity][1])}</b>, {where(f)}</p>
               <p className="small">{f.message}</p>
               {f.suggestion && <p className="muted small">{t("Gợi ý", "Suggestion")}: {f.suggestion}</p>}
             </div>

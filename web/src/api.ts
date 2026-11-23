@@ -20,7 +20,11 @@ export type Claim = {
   status: "verified" | "unverified" | "contradicted"; source_url: string | null; verified_at: string | null; corrected_text: string | null;
 };
 
-export type Finding = { slot_ref: string | null; severity: "low" | "medium" | "high"; rule: string; message: string; suggestion: string | null };
+// day_index/start_time/name_*: backend join theo slot_ref (cả slot của bản lịch trước khi planner sửa); null = cả chuyến
+export type Finding = {
+  slot_ref: string | null; severity: "low" | "medium" | "high"; rule: string; message: string; suggestion: string | null;
+  day_index?: number | null; start_time?: string | null; name_vi?: string | null; name_en?: string | null;
+};
 export type Report = { report_id: number; round: number; reviewer: "local_expert" | "budget" | "safety"; verdict: "approve" | "request_changes"; findings: Finding[] };
 export type TripEvent = {
   event_id: string; occurred_at: string; day_index: number; event_type: string; slot_id: string | null; poi_id: string | null;
