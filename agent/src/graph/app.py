@@ -170,10 +170,11 @@ def finalize(state):
     return {"itinerary": itinerary}
 
 
-def verify(state):
+def verify(state, usage=None):
     """UC-11 (P4): không claim sai nào tới PWA. Kiểm lịch trình vừa lưu, sửa giá/di chuyển sai bằng số của tool, giờ
-    ngoài giờ mở cửa thì gắn "chưa xác minh"; ghi bản đã sửa vào DB. Đứng trước approve nên chạy lại được khi resume."""
-    return {"itinerary": present_itinerary(state["itinerary"], state["run_id"])}
+    ngoài giờ mở cửa thì gắn "chưa xác minh"; ghi bản đã sửa vào DB. Đứng trước approve nên chạy lại được khi resume.
+    Token LLM tách claim cộng vào usage của lượt chạy (chi phí verifier nằm trong runs như mọi node)."""
+    return {"itinerary": present_itinerary(state["itinerary"], state["run_id"], usage=usage)}
 
 
 def ask_human(kind, data):
@@ -252,7 +253,7 @@ def add_planning(g, client, tools, usage):
     g.add_node("plan", traced("plan", lambda s: plan_or_keep_best(s, client, tools, usage)))
     g.add_node("validate", traced("validate", check))
     g.add_node("finalize", traced("finalize", finalize))
-    g.add_node("verify", traced("verify", verify))
+    g.add_node("verify", traced("verify", lambda s: verify(s, usage)))
     g.add_node("approve", traced("approve", approve))
     g.add_node("remember", traced("remember", remember))
     g.add_edge("load_profile", "plan")

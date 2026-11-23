@@ -410,9 +410,11 @@ def extract_llm(text: str, ctx: dict, run_id: str) -> list[DraftClaim]:
     mentioned = {p for _, p in _mentions(fold(text), _pois(ctx.get("destination_id", "hue")))}  # B4 bằng code
     names = {p["poi_id"]: p for p in repo.query("SELECT poi_id, name_vi, name_en FROM pois")}
     user = {"text": text, "trip_dates": ctx.get("trip_dates"), "pois": [names[p] for p in sorted(mentioned)]}
+    # ctx["usage"]: dict token/chi phí của lượt chạy gọi verifier (eval, graph) để cộng chi phí verifier vào runs
+    usage = ctx["usage"] if ctx.get("usage") is not None else {"in": 0, "out": 0, "cost": 0.0}
     try:
         out = agent_loop(make_client(), load_skill(SKILL, run_id, NODE), repr(user), [], LlmClaims, run_id, NODE,
-                         {"in": 0, "out": 0, "cost": 0}, max_turns=3)  # fmt: skip
+                         usage, max_turns=3)  # fmt: skip
     except Exception as e:  # noqa: BLE001 — mặc định nghi ngờ: thiếu LLM thì vẫn còn lưới regex
         repo.log_event(run_id, NODE, "guardrail", name="llm_extract_failed", error=f"{type(e).__name__}: {e}")
         return net
@@ -751,13 +753,15 @@ def _fix_slot(s, labeled, texts, lang):
     return s.model_copy(update=update) if update else s
 
 
-def check_itinerary(itinerary: Itinerary, run_id: str, *, extractor=None, fix=False) -> tuple[list[Claim], Itinerary]:
+def check_itinerary(itinerary: Itinerary, run_id: str, *, extractor=None, fix=False,
+                    usage: dict | None = None) -> tuple[list[Claim], Itinerary]:  # fmt: skip
     """Kiểm 1 lịch trình (docs/uc-11.md mục 5, B2). Field có cấu trúc của slot thành claim bằng code: start/end_time ↔
     get_opening_hours, cost_vnd ↔ get_poi × số người (như validator.expected_cost), travel_minutes_from_prev ↔
     get_travel_time. activity / note (thời tiết, giờ, giá viết bằng chữ) đi qua verify_text với ngày của slot.
     Slot cost_source = unverified (chưa có giá) không tạo claim giá vì không khẳng định con số nào.
-    fix=True: thêm B7 + B8 (sửa field sai bằng code, văn bản tự do qua verify_and_fix). Trả (claims, lịch đã sửa)."""
-    ctx = context_for_run(run_id)
+    fix=True: thêm B7 + B8 (sửa field sai bằng code, văn bản tự do qua verify_and_fix). Trả (claims, lịch đã sửa).
+    usage: dict token/chi phí của lượt chạy để cộng phần LLM tách claim (W10-P4-2)."""
+    ctx = context_for_run(run_id) | {"usage": usage}
     lang = ctx.get("lang", "vi")
     extractor = extractor or default_extractor()
     _, profile = repo.latest_profile(itinerary.trip_id) if itinerary.trip_id else (None, None)
@@ -806,12 +810,12 @@ def default_extractor():
 SLOT_COLUMNS = ("activity", "note", "cost_vnd", "cost_source", "hours_status", "travel_minutes_from_prev")
 
 
-def present_itinerary(itinerary: Itinerary, run_id: str, *, extractor=None) -> Itinerary:
+def present_itinerary(itinerary: Itinerary, run_id: str, *, extractor=None, usage: dict | None = None) -> Itinerary:
     """Node verify của UC-02 (sau finalize, trước bước duyệt): kiểm + sửa lịch trình đã lưu, ghi bản đã sửa vào DB để
     API chỉ đọc được bản đã sửa. Chạy lại được (backend chết giữa chừng): xoá claim cũ của lịch trình trước khi kiểm."""
     repo.query("DELETE FROM claims WHERE target_type = 'itinerary_slot' AND target_id LIKE ?",
                (f"{itinerary.itinerary_id}:%",))  # fmt: skip
-    claims, fixed = check_itinerary(itinerary, run_id, extractor=extractor, fix=True)
+    claims, fixed = check_itinerary(itinerary, run_id, extractor=extractor, fix=True, usage=usage)
     before = {s.slot_id: s for s in itinerary.slots}
     changed = [s for s in fixed.slots if s != before.get(s.slot_id)]
     for s in changed:
