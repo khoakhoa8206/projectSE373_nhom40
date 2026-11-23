@@ -45,7 +45,10 @@ Nếu không đủ thời gian/dữ liệu, giảm điểm hoặc ghi chưa đá
 dữ liệu và các quy tắc trên; không làm được thì giữ bản bảo thủ và ghi rõ lý do trong note.
 10. user_memory là sở thích người dùng đã đồng ý lưu từ chuyến trước (dị ứng, ăn kiêng, nhịp đi, sở thích):
 dùng để ưu tiên và tránh món/điểm không hợp; hồ sơ chuyến này luôn thắng khi mâu thuẫn. Không nhắc lại mục nhạy cảm
-trong note nếu không cần."""
+trong note nếu không cần.
+11. review_findings_to_fix là ý kiến của reviewer (local_expert/budget/safety) về previous_itinerary, slot_ref trỏ
+slot cũ: sửa đúng slot được nêu theo suggestion nếu dữ liệu cho phép, giữ phần còn lại; không làm được thì ghi lý do
+trong note. Finding an toàn (vùng hạn chế, thời tiết, trẻ em) luôn ưu tiên hơn sở thích."""
 
 
 def previous_facts(state, by_name):
@@ -152,6 +155,7 @@ def plan(state, client, tools, usage):
             # user_feedback: luồng duyệt P1 (#64); feedback: graph duyệt riêng của P2 (build_approval_graph)
             "user_feedback": state.get("user_feedback") or state.get("feedback"),
             "user_memory": state.get("memory") or [],
+            "review_findings_to_fix": state.get("review_findings") or [],  # UC-06
             "verified_context": context,
         },
         ensure_ascii=False,
