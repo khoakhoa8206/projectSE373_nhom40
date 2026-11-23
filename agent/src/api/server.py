@@ -360,6 +360,17 @@ def stream_run(run_id: str, request: Request, after: int = 0, user_id: str = Dep
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})  # fmt: skip
 
 
+@app.get("/api/runs")
+def list_runs(trip_id: str | None = None, run_id: str | None = None, user_id: str = Depends(current_user)):
+    """Lượt chạy của người dùng (mới nhất trước, tối đa 100) cho trace viewer; lọc theo trip_id hoặc run_id."""
+    return repo.query(
+        """SELECT run_id, trip_id, uc, status, started_at, ended_at, tokens_in, tokens_out, cost_usd, latency_ms
+           FROM runs WHERE user_id = ? AND (? IS NULL OR trip_id = ?) AND (? IS NULL OR run_id = ?)
+           ORDER BY started_at DESC, rowid DESC LIMIT 100""",
+        (user_id, trip_id, trip_id, run_id, run_id),
+    )
+
+
 @app.get("/api/runs/{run_id}/trace")
 def get_trace(run_id: str, user_id: str = Depends(current_user)):
     """Các bước của 1 lượt chạy (node, tool, skill, LLM) cho panel log."""
