@@ -384,7 +384,7 @@ function TraceTab({ runs }: { runs: RunRow[] }) {
     <div className="trace-list">
       {runs.map((r) => (
         <details key={r.run_id} onToggle={(e) => e.currentTarget.open && open(r.run_id)}>
-          <summary><b>{r.uc}</b> {r.status}, <code>{r.run_id}</code>{r.tokens_in + r.tokens_out > 0 && `, ${r.tokens_in + r.tokens_out} token`}{r.latency_ms != null && `, ${r.latency_ms} ms`}</summary>
+          <summary><b>{r.uc}</b> {r.status}, <code>{r.run_id}</code>{r.tokens_in + r.tokens_out > 0 && `, ${r.tokens_in + r.tokens_out} token`}{r.latency_ms != null && `, ${r.latency_ms} ms`} <a href={`#/trace/${r.run_id}`}>{t("mở trace viewer", "open trace viewer")}</a></summary>
           <ol className="timeline">
             {events[r.run_id]?.map((e) => <li key={e.seq}><b>{e.node}</b> {e.kind}{e.name && `: ${e.name}`}{e.duration_ms != null && `, ${e.duration_ms} ms`}{e.error && `, ${e.error}`}</li>)}
           </ol>
