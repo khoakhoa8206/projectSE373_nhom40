@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { Poi } from "./api";
 import { getLang, locale, poiName, t } from "./i18n";
 
@@ -42,10 +42,29 @@ export function priceText(p: Poi) {
   return p.category === "attraction" ? t("Giá vé chưa xác minh", "Ticket price not verified") : t("Giá chưa xác minh", "Price not verified");
 }
 
+/** Ghi chú ảnh minh hoạ theo loại điểm: quán ăn dùng ảnh món Huế; điểm khác (vd Làng hương Thủy Xuân) dùng ảnh chụp ở Huế
+ * nhưng không tại chính điểm đó. */
+export const illustrativeNote = (p: Poi) => (p.category === "food"
+  ? t("Ảnh minh hoạ món Huế, không phải ảnh của quán", "Illustrative photo of Hue food, not taken at this restaurant")
+  : t("Ảnh minh hoạ chụp ở Huế, không chụp tại địa điểm này", "Illustrative photo taken in Hue, not at this place"));
+
 export function Photo({ poi, eager = false }: { poi: Poi; eager?: boolean }) {
-  if (!poi.image) return <div className="no-photo">{t("Chưa có ảnh có giấy phép cho địa điểm này", "No licensed photo for this place yet")}</div>;
+  const [broken, setBroken] = useState<string | null>(null); // file ảnh không tải được (vd chưa có trong web/public/poi)
+  if (!poi.image || broken === poi.image.file) return <div className="no-photo">{t("Chưa có ảnh có giấy phép cho địa điểm này", "No licensed photo for this place yet")}</div>;
   const name = poiName(poi);
-  return <img src={poi.image.file} alt={poi.image.illustrative ? t(`Ảnh minh hoạ món ăn Huế cho ${name}`, `Illustrative photo of Hue food for ${name}`) : name} loading={eager ? "eager" : "lazy"} />;
+  const file = poi.image.file;
+  return <img src={file} alt={poi.image.illustrative ? t(`Ảnh minh hoạ cho ${name}`, `Illustrative photo for ${name}`) : name} loading={eager ? "eager" : "lazy"} onError={() => setBroken(file)} />;
+}
+
+/** Ghi công ảnh (bắt buộc với CC BY / CC BY-SA): tác giả, giấy phép, link nguồn; ảnh minh hoạ ghi rõ. */
+export function PhotoCredit({ poi }: { poi: Poi }) {
+  if (!poi.image) return null;
+  return (
+    <p className="muted tiny credit">
+      {poi.image.illustrative && `${illustrativeNote(poi)}. `}
+      {t("Ảnh", "Photo")}: <a href={poi.image.source_url} target="_blank" rel="noreferrer">{poi.image.author}</a>, {poi.image.license}, Wikimedia Commons
+    </p>
+  );
 }
 
 export function PoiCard({ poi }: { poi: Poi }) {
@@ -57,7 +76,7 @@ export function PoiCard({ poi }: { poi: Poi }) {
         <h3>{poiName(poi)}</h3>
         <p className="muted small">{hoursText(poi.opening_hours)}</p>
         <p className="card-price">{priceText(poi)}</p>
-        {poi.image?.illustrative && <p className="muted tiny">{t("Ảnh minh hoạ món Huế, không phải ảnh của quán", "Illustrative photo of Hue food, not taken at this restaurant")}</p>}
+        {poi.image?.illustrative && <p className="muted tiny">{illustrativeNote(poi)}</p>}
       </div>
     </a>
   );
