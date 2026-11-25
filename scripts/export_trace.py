@@ -1,6 +1,6 @@
 """Xuất 1 trace làm mẫu để commit: python scripts/export_trace.py <run_id> --uc UC-11
 Tìm <run_id>.jsonl trong .runtime/traces/ (app chạy bằng run.py), traces/, results/**/traces/ (eval); không có thì
-đọc bảng trace_events trong DB_PATH (mặc định .runtime/tourguide.db). Che toạ độ lại lần nữa (mask_coords) rồi ghi
+đọc bảng trace_events trong DB_PATH (mặc định .runtime/tourguide.db). Che toạ độ, email, SĐT lại lần nữa rồi ghi
 traces/samples/uc-11/<run_id>.jsonl."""
 
 import argparse
@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from agent.src.obs.trace import mask_coords
+from agent.src.obs.trace import mask_coords, redact
 
 ROOTS = (".runtime/traces", "traces", "results")
 
@@ -35,7 +35,7 @@ def export(run_id, uc, out_root="traces/samples", roots=ROOTS):
         sys.exit(f"Không tìm thấy trace của {run_id} ({', '.join(roots)}, trace_events trong {os.environ['DB_PATH']})")
     out = Path(out_root) / uc.lower() / f"{run_id}.jsonl"  # UC-11 -> uc-11
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("".join(json.dumps(mask_coords(e), ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+    out.write_text("".join(json.dumps(redact(mask_coords(e)), ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
     return out, len(events)
 
 

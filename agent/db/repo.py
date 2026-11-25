@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pydantic_core import to_jsonable_python
 
 from agent.schemas import POI, Itinerary, TripEvent, TripProfile, Violation
-from agent.src.obs.trace import mask_coords, write_jsonl
+from agent.src.obs.trace import mask_coords, redact, write_jsonl
 
 VN = timezone(timedelta(hours=7))  # Việt Nam không có giờ mùa hè
 
@@ -130,10 +130,11 @@ def finish_run(run_id, status, tokens_in, tokens_out, cost_usd, latency_ms):
 
 
 def log_event(run_id, node, kind, name=None, args=None, result=None, duration_ms=None, tokens=None, error=None):
-    """Ghi 1 bước vào trace_events (seq tự tăng theo run_id) và traces/<run_id>.jsonl. Toạ độ được làm thô."""
-    args, result = (None if x is None else mask_coords(to_jsonable_python(x, fallback=str)) for x in (args, result))
+    """Ghi 1 bước vào trace_events (seq tự tăng theo run_id) và traces/<run_id>.jsonl. Toạ độ được làm thô,
+    email/SĐT bị che (args, result, error)."""
+    args, result = (None if x is None else redact(mask_coords(to_jsonable_python(x, fallback=str))) for x in (args, result))
     ev = {"run_id": run_id, "ts": now(), "node": node, "kind": kind, "name": name, "args": args, "result": result,
-          "duration_ms": duration_ms, "tokens": tokens, "error": error}  # fmt: skip
+          "duration_ms": duration_ms, "tokens": tokens, "error": redact(error)}  # fmt: skip
     ev["seq"] = query(
         """INSERT INTO trace_events (run_id, seq, ts, node, kind, name, args, result, duration_ms, tokens, error)
            VALUES (:run_id, (SELECT COALESCE(MAX(seq), 0) + 1 FROM trace_events WHERE run_id = :run_id),

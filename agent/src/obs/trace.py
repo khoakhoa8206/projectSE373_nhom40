@@ -1,7 +1,9 @@
-"""Quan sát: làm thô toạ độ trước khi ghi log + ghi trace ra traces/<run_id>.jsonl (song song bảng trace_events)."""
+"""Quan sát: làm thô toạ độ, che email/SĐT trước khi ghi log + ghi trace ra traces/<run_id>.jsonl
+(song song bảng trace_events)."""
 
 import json
 import os
+import re
 from pathlib import Path
 
 COORD_KEYS = {"lat", "lon", "lng", "latitude", "longitude"}
@@ -19,6 +21,22 @@ def mask_coords(obj, _in_coords=False):
         return [mask_coords(v, _in_coords) for v in obj]
     if _in_coords and isinstance(obj, float):
         return round(obj, 2)
+    return obj
+
+
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# ponytail: chỉ bắt số liền (di động 10 số, bàn 11 số, +84...); số viết cách quãng "090 123 4567" chưa che
+PHONE = re.compile(r"(?<!\d)(?:\+84|0)\d{9,10}(?!\d)")
+
+
+def redact(obj):
+    """Che email, số điện thoại trong mọi chuỗi trước khi ghi trace (Buổi 11: PII không vào Log/Trace)."""
+    if isinstance(obj, str):
+        return PHONE.sub("[phone]", EMAIL.sub("[email]", obj))
+    if isinstance(obj, dict):
+        return {k: redact(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [redact(v) for v in obj]
     return obj
 
 
