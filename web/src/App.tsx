@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type ApiError, type Poi, type User } from "./api";
 import AuthPanel from "./components/AuthPanel";
 import { getLang, setLang, t, type Lang } from "./i18n";
+import DashboardPage from "./pages/Dashboard";
 import Home from "./pages/Home";
 import PoiPage from "./pages/Poi";
 import { PlanPage, TripsPage } from "./pages/Plan";
@@ -11,7 +12,7 @@ import { CreditsPage, MemoryPage, NarratePage, VerifyPage } from "./pages/Tools"
 import { Empty } from "./ui";
 
 const NAV = () => [["/", t("Khám phá", "Explore")], ["/chat", t("Hội thoại", "Chat")], ["/plan", t("Lập lịch", "Plan")], ["/trips", t("Chuyến đi", "Trips")],
-  ["/narrate", t("Thuyết minh", "Narration")], ["/memory", t("Bộ nhớ", "Memory")], ["/verify", t("Kiểm chứng", "Fact check")]];
+  ["/narrate", t("Thuyết minh", "Narration")], ["/memory", t("Bộ nhớ", "Memory")], ["/verify", t("Kiểm chứng", "Fact check")], ["/dashboard", "Dashboard"]];
 
 export type Shell = { user: User | null; pois: Poi[]; llm: boolean; askLogin: () => void };
 
@@ -74,6 +75,7 @@ export default function App() {
   else if (parts[0] === "narrate") page = <NarratePage shell={shell} preset={new URLSearchParams(query).get("poi")} />;
   else if (parts[0] === "memory") page = <MemoryPage shell={shell} />;
   else if (parts[0] === "verify") page = <VerifyPage shell={shell} />;
+  else if (parts[0] === "dashboard") page = <DashboardPage shell={shell} />;
   else if (parts[0] === "credits") page = <CreditsPage pois={pois} />;
   else page = <Home shell={shell} />;
 
