@@ -8,7 +8,7 @@ import os
 import secrets
 import sqlite3
 import threading
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, closing
 from pathlib import Path
 from typing import Any, Literal
 
@@ -26,6 +26,7 @@ from agent.src.graph import app as graph
 from agent.src.memory import store
 from agent.src.nodes.journal import run_uc09
 from agent.src.nodes.narrate import run_uc03
+from agent.src.obs.dashboard import dashboard
 
 load_dotenv()
 FICTIONAL_IDS = {user_id for user_id, _, _ in FICTIONAL_USERS}
@@ -409,6 +410,13 @@ def eval_results():
         rows = [json.loads(line) for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
         out.setdefault(f.parent.parent.name, {})[f.parent.name] = summarize_cases(rows)
     return out
+
+
+@app.get("/api/dashboard")
+def ops_dashboard(user_id: str = Depends(current_user)):
+    """Dashboard vận hành (5 chỉ số Buổi 11) trên các lượt chạy của người dùng: xem agent/src/obs/dashboard.py."""
+    with closing(repo.get_conn()) as conn:
+        return dashboard([conn], user_id)
 
 
 @app.post("/api/narrate")
